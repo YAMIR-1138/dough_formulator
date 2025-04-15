@@ -26,4 +26,8 @@ This is an ongoing project I'm making for fun, so parts of it may be unfinished,
 
 ## 📄 License
 
+
 MIT — because the rebellion runs on open-source
+
+
+

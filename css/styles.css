@@ -1,0 +1,1124 @@
+:root {
+    --primary-color: #4A2D0A;
+    --primary-color-rgb: 74, 45, 10;
+    --primary-light: #8C6B4F;
+    --primary-dark: #2C1A06;
+    --secondary-color: #F3E9D9;
+    --accent-color: #D98E04;
+    --text-color: #2D2013;
+    --text-light: #6B5F53;
+    --bg-color: #FAF6F0;
+    --card-bg: #FFFFFF;
+    --border-color: #E5D7C3;
+    --success-color: #60A561;
+    --error-color: #C25450;
+    --shadow: 0 4px 12px rgba(45, 32, 19, 0.08);
+    
+    --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --border-radius: 8px;
+    --transition: all 0.3s ease;
+}
+
+.dark-theme {
+    --primary-color: #A67C52;
+    --primary-color-rgb: 166, 124, 82;
+    --primary-light: #C4A080;
+    --primary-dark: #704D26;
+    --secondary-color: #362E29;
+    --accent-color: #F0B956;
+    --text-color: #F0E6D9;
+    --text-light: #BDB3A7;
+    --bg-color: #1E1914;
+    --card-bg: #2D251E;
+    --border-color: #4D3F32;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-main);
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    transition: var(--transition);
+}
+
+.app-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+h1 {
+    font-size: 1.8rem;
+    font-weight: 900;
+    margin: 0;
+    color: var(--primary-color);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    position: relative;
+    display: inline-block;
+}
+
+h2 {
+    color: var(--primary-color);
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+}
+
+h3 {
+    color: var(--primary-dark);
+    font-size: 1.1rem;
+    margin: 1rem 0 0.5rem 0;
+}
+
+.mode-toggle {
+    display: flex;
+    border: 1px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.mode-toggle button {
+    background: none;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--primary-color);
+}
+
+.mode-toggle button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+#theme-toggle-btn {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+#theme-toggle-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+main {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+}
+
+.card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.75rem;
+    box-shadow: 0 10px 30px rgba(45, 32, 19, 0.05), 
+                0 1px 4px rgba(45, 32, 19, 0.1);
+    transition: var(--transition);
+    border: 1px solid rgba(229, 215, 195, 0.3);
+}
+
+.card:hover {
+    box-shadow: 0 15px 35px rgba(45, 32, 19, 0.08), 
+                0 3px 10px rgba(45, 32, 19, 0.12);
+}
+
+.calculator-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.anchor-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+select {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    transition: var(--transition);
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.calculator-inputs {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: relative;
+}
+
+label {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+input[type="number"],
+input[type="text"],
+input[type="datetime-local"],
+textarea,
+select {
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    width: 100%;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 3px rgba(45, 32, 19, 0.05);
+    font-size: 0.95rem;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+input[type="datetime-local"]:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(217, 142, 4, 0.15);
+}
+
+input[type="number"]:hover,
+input[type="text"]:hover,
+input[type="datetime-local"]:hover,
+textarea:hover,
+select:hover {
+    border-color: var(--primary-color);
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 5px;
+    background: var(--secondary-color);
+    outline: none;
+    margin: 0.7rem 0;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    border: 2px solid white;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(45, 32, 19, 0.2);
+    transition: all 0.2s ease;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    border: 2px solid white;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(45, 32, 19, 0.2);
+    transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover,
+input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(45, 32, 19, 0.3);
+}
+
+.slider-with-value {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    margin: 0.5rem 0;
+}
+
+.slider-with-value input[type="range"] {
+    flex: 1;
+}
+
+.slider-with-value input[type="number"] {
+    width: 70px;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+.toggle-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toggle-inputs select {
+    flex: 0 0 auto;
+}
+
+button, .button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+button:hover, .button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(45, 32, 19, 0.15);
+}
+
+button:active, .button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(45, 32, 19, 0.1);
+}
+
+/* Primary action buttons */
+button.primary, .button.primary {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    font-weight: 700;
+}
+
+button.primary:hover, .button.primary:hover {
+    background-color: #C47F03; /* Darker shade of accent */
+}
+
+/* Secondary buttons */
+button.secondary, .button.secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+button.secondary:hover, .button.secondary:hover {
+    background-color: #E9DBB9; /* Slightly darker shade of secondary */
+}
+
+/* Button icon styling */
+button i, .button i {
+    font-size: 0.9em;
+}
+
+.flour-blend, .flour-blend-advanced {
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 1rem;
+}
+
+.flour-item {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.flour-presets {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+#flour-items-container {
+    margin-bottom: 1rem;
+}
+
+.recipe-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.recipe-ingredients ul,
+.recipe-flour-breakdown ul {
+    list-style: none;
+    margin-top: 0.5rem;
+}
+
+.recipe-ingredients li,
+.recipe-flour-breakdown li {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+    padding: 0.2rem 0;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.recipe-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.timeline-inputs {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-schedule ul {
+    list-style: none;
+    margin-top: 0.5rem;
+    position: relative;
+}
+
+.timeline-schedule li {
+    padding: 0.5rem 0 0.5rem 2rem;
+    position: relative;
+}
+
+.timeline-schedule li:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--primary-light);
+}
+
+.timeline-schedule li:after {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: 1rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+}
+
+.recipes-list {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    margin-bottom: 1.5rem;
+}
+
+.recipe-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.recipe-card:hover {
+    border-color: var(--primary-color);
+    background-color: var(--secondary-color);
+}
+
+.recipe-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.recipe-card-title {
+    font-weight: 500;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+}
+
+.recipe-card-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.recipe-card-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.recipe-card-detail {
+    background-color: var(--bg-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.recipes-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.close-modal {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-light);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding: 1rem;
+    color: var(--text-light);
+    font-size: 0.9rem;
+}
+
+footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive Styles */
+@media (min-width: 768px) {
+    h1 {
+        font-size: 2.2rem;
+    }
+    
+    h2 {
+        font-size: 1.6rem;
+    }
+    
+    h3 {
+        font-size: 1.2rem;
+    }
+    
+    main {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    #calculator, #timeline {
+        grid-column: span 2;
+    }
+    
+    .calculator-inputs {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .timeline-inputs {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .recipes-list {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .app-container {
+        padding: 2rem;
+    }
+    
+    main {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    #calculator {
+        grid-column: span 2;
+    }
+    
+    #timeline {
+        grid-column: span 3;
+    }
+    
+    .recipes-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Advanced Flour Blend Styles */
+.flour-blend-advanced {
+    display: block;
+}
+
+.advanced-mode .flour-blend {
+    display: none;
+}
+
+.advanced-mode .flour-blend-advanced {
+    display: block;
+}
+
+.advanced-flour-item {
+    display: grid;
+    grid-template-columns: 1fr 2fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.advanced-flour-item select {
+    width: 100%;
+}
+
+.advanced-flour-item button {
+    padding: 0.3rem;
+    background-color: var(--error-color);
+}
+
+.anchor-active {
+    background-color: var(--secondary-color);
+    border-color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    padding: 0.75rem;
+    margin: -0.75rem;
+}
+
+/* Tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 0.3rem;
+}
+
+.tooltip i {
+    color: var(--primary-color);
+    font-size: 0.9rem;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    background-color: var(--primary-dark);
+    color: white;
+    text-align: center;
+    border-radius: var(--border-radius);
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--primary-dark) transparent transparent transparent;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+.active-anchor {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background-color: var(--secondary-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+}
+
+.active-anchor span:first-child {
+    color: var(--text-light);
+}
+
+.active-anchor #current-anchor {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.toggle-section {
+    background: none;
+    color: var(--primary-color);
+    padding: 0.3rem;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toggle-section:hover {
+    background-color: var(--secondary-color);
+}
+
+.toggle-section.collapsed i {
+    transform: rotate(180deg);
+}
+
+#timeline-content.collapsed {
+    display: none;
+}
+
+.temp-input {
+    position: relative;
+}
+
+.unit-toggle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    background-color: var(--primary-light);
+    color: white;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    font-size: 0.9rem;
+    border-radius: 4px;
+}
+
+.unit-toggle:hover {
+    background-color: var(--primary-dark);
+}
+
+.input-field-active {
+    border: 2px solid var(--primary-color);
+    background-color: var(--secondary-color);
+}
+
+/* Fix for any double class attributes */
+#flour-weight-group {
+    /* This will override any inline class attribute issues */
+}
+
+/* Input with lock styling */
+.input-with-lock {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-bottom: 25px; /* Add space for the slider below */
+}
+
+.input-with-lock input[type="number"] {
+    flex: 1;
+    border-radius: 4px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.input-with-lock input[type="range"] {
+    position: absolute;
+    width: calc(100% - 40px);
+    left: 0;
+    top: 40px;
+    margin: 0;
+}
+
+.input-with-lock input.locked {
+    background-color: rgba(var(--primary-color-rgb), 0.05);
+    border: 2px solid var(--primary-color);
+    box-shadow: 0 0 3px var(--primary-color);
+}
+
+/* Lock toggle button */
+.lock-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    margin-left: 5px;
+    padding: 5px;
+    color: var(--text-light);
+    transition: all 0.2s ease;
+}
+
+.lock-toggle.locked {
+    color: var(--primary-color);
+}
+
+.lock-toggle .fa-lock,
+.lock-toggle .fa-unlock {
+    font-size: 16px;
+}
+
+.lock-toggle.toggle-animation {
+    animation: pulse 0.3s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* Make it more obvious to users which fields are locked */
+input.locked:focus {
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.3);
+    border-color: var(--primary-color);
+}
+
+/* Additional styling for clarity */
+.input-with-lock {
+    position: relative;
+}
+
+/* Improve lock toggle button visibility */
+.lock-toggle {
+    transition: all 0.2s ease;
+}
+
+.lock-toggle.locked i {
+    color: var(--primary-color);
+}
+
+/* Add styles for locked inputs */
+input.locked {
+    background-color: rgba(var(--primary-color-rgb), 0.05);
+    border: 2px solid var(--primary-color);
+}
+
+.lock-toggle.locked {
+    color: var(--primary-color);
+}
+
+/* Add animation for toggle */
+.toggle-animation {
+    animation: pulse 0.3s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+}
+
+/* Range slider styling */
+.range-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 5px;
+    background: var(--secondary-color);
+    outline: none;
+    transition: opacity 0.2s;
+}
+
+.range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.range-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+    background: var(--primary-dark);
+    transform: scale(1.1);
+}
+
+.range-slider::-moz-range-thumb:hover {
+    background: var(--primary-dark);
+    transform: scale(1.1);
+}
+
+.ingredient-note {
+    font-size: 0.9em;
+    font-style: italic;
+    color: var(--text-light);
+    margin-left: 0.5rem;
+}
+
+/* Mobile improvements */
+@media (max-width: 767px) {
+    .app-container {
+        padding: 0.5rem;
+    }
+    
+    .card {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .input-with-lock {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .input-with-lock .range-slider {
+        margin-top: 0.5rem;
+    }
+    
+    .lock-toggle {
+        position: absolute;
+        right: 0.5rem;
+        top: 0.5rem;
+    }
+    
+    .input-group {
+        position: relative;
+        padding-right: 2rem;
+    }
+    
+    .starter-input-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .starter-input-row .lock-toggle {
+        right: 0.5rem;
+        top: 0.5rem;
+    }
+    
+    .recipe-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .recipe-actions button {
+        width: 100%;
+    }
+    
+    /* Improve recipe flour breakdown on mobile */
+    .recipe-flour-breakdown li {
+        flex-direction: column;
+        align-items: flex-start;
+        padding-bottom: 0.5rem;
+    }
+    
+    .recipe-flour-breakdown li span:last-child {
+        font-weight: 500;
+    }
+}
+
+/* UI Polish */
+.card {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+}
+
+input[type="number"],
+input[type="text"],
+textarea,
+select {
+    transition: border-color 0.2s ease;
+}
+
+input[type="number"]:hover,
+input[type="text"]:hover,
+textarea:hover,
+select:hover {
+    border-color: var(--primary-color);
+}
+
+.range-slider {
+    height: 6px;
+    cursor: pointer;
+}
+
+button, .button {
+    transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+button:active, .button:active {
+    transform: scale(0.98);
+}
+
+/* Style improvements for flour blend items */
+.advanced-flour-item {
+    background-color: var(--secondary-color);
+    border-radius: var(--border-radius);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+
+.advanced-flour-item button {
+    opacity: 0.7;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.advanced-flour-item button:hover {
+    opacity: 1;
+}
+
+.flour-type-select {
+    margin-bottom: 0.5rem;
+    width: 100%;
+}
+
+/* Mobile optimizations for sliders */
+@media (max-width: 767px) {
+    .range-slider::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .range-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* Add styling for the new brand and tagline */
+.brand {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+h1::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    height: 3px;
+    width: 40px;
+    background-color: var(--accent-color);
+    transition: width 0.3s ease;
+}
+
+h1:hover::after {
+    width: 100%;
+}
+
+.tagline {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-top: 0.3rem;
+    letter-spacing: 0.12em;
+    font-style: italic;
+    font-weight: 300;
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.tagline::before {
+    content: '•';
+    position: absolute;
+    left: 0.6rem;
+    top: 0;
+    font-size: 1rem;
+    color: var(--accent-color);
+}
+
+/* Fix the shadow effect on h1 */
+h1:hover {
+    text-shadow: 0 0 8px rgba(217, 142, 4, 0.3); /* Using the accent color */
+}
+
+/* Better label styling */
+label {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.3rem;
+    font-size: 0.95rem;
+} 

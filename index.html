@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Professional sourdough calculator for precise baking formulas">
+    <title>DOUGH_FORMULATOR | Professional Sourdough Calculator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="brand">
+                <h1>DOUGH_<span class="accent">FORMULATOR</span></h1>
+                <div class="tagline">Calculate. Ferment. Ascend.</div>
+            </div>
+            <button id="theme-toggle-btn" aria-label="Toggle dark mode">
+                <i class="fas fa-moon"></i>
+            </button>
+        </header>
+
+        <main>
+            <section id="calculator" class="card">
+                <div class="calculator-header">
+                    <h2>Recipe Calculator</h2>
+                    <div class="active-anchor">
+                        <span>Active locks:</span>
+                        <span id="active-locks-display">None</span>
+                        <span class="tooltip">
+                            <i class="fas fa-info-circle"></i>
+                            <span class="tooltip-text">Lock the values you want to keep fixed. The calculator will adjust other values accordingly.</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div id="calculator-form" class="calculator-form">
+                    <div class="input-group">
+                        <label for="dough-weight">Dough Weight (g)</label>
+                        <div class="input-with-lock">
+                            <input type="number" id="dough-weight" name="dough-weight" value="1000" min="0" step="1">
+                            <button type="button" class="lock-toggle" data-field="doughWeight">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                            <input type="range" id="dough-weight-slider" class="range-slider" min="500" max="5000" value="1000" step="50">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="flour-weight">Flour Weight (g)</label>
+                        <div class="input-with-lock">
+                            <input type="number" id="flour-weight" name="flour-weight" value="500" min="0" step="1">
+                            <button type="button" class="lock-toggle" data-field="flourWeight">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                            <input type="range" id="flour-weight-slider" class="range-slider" min="100" max="2000" value="500" step="10">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="hydration">Hydration (%)</label>
+                        <div class="input-with-lock">
+                            <input type="number" id="hydration" name="hydration" value="75" min="0" max="200" step="1">
+                            <button type="button" class="lock-toggle" data-field="hydration">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                            <input type="range" id="hydration-slider" class="range-slider" min="0" max="200" value="75" step="1">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="starter-amount">Starter Amount</label>
+                        <div class="starter-input-row">
+                            <div class="input-with-unit">
+                                <input type="number" id="starter-amount" name="starter-amount" value="20" min="0" step="1">
+                                <select id="starter-unit" name="starter-unit">
+                                    <option value="percentage">%</option>
+                                    <option value="grams">g</option>
+                                </select>
+                            </div>
+                            <button type="button" class="lock-toggle" data-field="starter">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="starter-amount-slider-container" style="display: none; width: 100%; padding-top: 10px;">
+                        <input type="range" id="starter-amount-slider" class="range-slider" min="0" max="500" value="20" step="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="salt-percentage">Salt (%)</label>
+                        <div class="input-with-lock">
+                            <input type="number" id="salt-percentage" name="salt-percentage" value="2" min="0" max="20" step="0.1">
+                            <button type="button" class="lock-toggle" data-field="salt">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                            <input type="range" id="salt-percentage-slider" class="range-slider" min="0" max="20" value="2" step="0.1">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="starter-hydration">Starter Hydration (%)</label>
+                        <div class="input-with-lock">
+                            <input type="number" id="starter-hydration" name="starter-hydration" value="100" min="30" max="200" step="5">
+                            <button type="button" class="lock-toggle" data-field="starterHydration">
+                                <i class="fas fa-unlock"></i>
+                            </button>
+                            <input type="range" id="starter-hydration-slider" class="range-slider" min="30" max="200" value="100" step="5">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flour-blend-advanced" id="flour-blend-advanced">
+                    <h3>Flour Blend</h3>
+                    <div id="flour-items-container">
+                        <!-- Flour items will be added dynamically -->
+                    </div>
+                    <button id="add-flour-btn"><i class="fas fa-plus"></i> Add Flour</button>
+                    <div class="flour-presets">
+                        <button id="save-blend-btn">Save Blend</button>
+                        <select id="flour-presets">
+                            <option value="">Load Saved Blend</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section id="recipe-results" class="card">
+                <h2>Formula</h2>
+                <div class="recipe-summary">
+                    <div class="recipe-total">
+                        <span>Total Dough Weight:</span>
+                        <span id="result-dough-weight">1220g</span>
+                    </div>
+                    <div class="recipe-hydration">
+                        <span>Hydration:</span>
+                        <span id="result-hydration">75%</span>
+                    </div>
+                </div>
+                <div class="recipe-ingredients">
+                    <h3>Ingredients</h3>
+                    <ul id="ingredients-list">
+                        <li><span>Total Flour:</span> <span id="result-flour">1000g</span></li>
+                        <li><span>Flour to add:</span> <span id="result-flour-to-add">900g</span></li>
+                        <li><span>Total Water:</span> <span id="result-water">750g</span></li>
+                        <li><span>Water to add:</span> <span id="result-water-to-add">650g</span></li>
+                        <li><span>Starter:</span> <span id="result-starter">200g</span> <span class="ingredient-note">(contains <span id="result-starter-flour">100g</span> flour and <span id="result-starter-water">100g</span> water)</span></li>
+                        <li><span>Salt:</span> <span id="result-salt">20g</span></li>
+                    </ul>
+                </div>
+                <div class="recipe-flour-breakdown">
+                    <h3>Flour Breakdown</h3>
+                    <ul id="flour-breakdown-list">
+                        <!-- Flour breakdown will be filled dynamically -->
+                    </ul>
+                </div>
+                <div class="recipe-actions">
+                    <button id="save-recipe-btn"><i class="fas fa-save"></i> Save Formula</button>
+                    <button id="copy-recipe-btn"><i class="fas fa-copy"></i> Copy Formula</button>
+                </div>
+            </section>
+
+            <section id="timeline" class="card" style="display: none;">
+                <div class="section-header">
+                    <h2>Baking Timeline</h2>
+                    <button id="toggle-timeline-btn" class="toggle-section" aria-label="Toggle timeline visibility">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
+                </div>
+                <div id="timeline-content">
+                    <div class="timeline-inputs">
+                        <div class="timeline-start">
+                            <label for="timeline-mode">Calculate from:</label>
+                            <select id="timeline-mode">
+                                <option value="start">Start Time</option>
+                                <option value="end">Ready Time</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="timeline-date">Date & Time</label>
+                            <input type="datetime-local" id="timeline-date">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="room-temp">Room Temperature</label>
+                            <div class="slider-with-value temp-input">
+                                <input type="range" id="room-temp-slider" min="18" max="30" value="22" step="1">
+                                <input type="number" id="room-temp" value="22" min="18" max="30" step="1">
+                                <button id="temp-unit-toggle" class="unit-toggle">°C</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-schedule">
+                        <h3>Schedule</h3>
+                        <ul id="timeline-steps">
+                            <!-- Timeline steps will be filled dynamically -->
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="saved-recipes" class="card">
+                <h2>Saved Formulas</h2>
+                <div class="recipes-list" id="recipes-container">
+                    <!-- Saved formulas will be displayed here -->
+                    <p id="no-recipes-message">No saved formulas yet.</p>
+                </div>
+                <div class="recipes-actions">
+                    <button id="export-recipes-btn"><i class="fas fa-file-export"></i> Export Formulas</button>
+                    <label for="import-recipes-input" class="button">
+                        <i class="fas fa-file-import"></i> Import Formulas
+                    </label>
+                    <input type="file" id="import-recipes-input" accept=".json" style="display: none;">
+                </div>
+            </section>
+        </main>
+
+        <div id="recipe-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Save Formula</h2>
+                <div class="recipe-form">
+                    <div class="input-group">
+                        <label for="recipe-name">Formula Name</label>
+                        <input type="text" id="recipe-name" placeholder="My Sourdough Formula">
+                    </div>
+                    <div class="input-group">
+                        <label for="recipe-notes">Notes (optional)</label>
+                        <textarea id="recipe-notes" placeholder="Any special notes about this formula"></textarea>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button id="save-recipe-confirm">Save</button>
+                    <button id="cancel-save">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="flour-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Save Flour Blend</h2>
+                <div class="flour-blend-form">
+                    <div class="input-group">
+                        <label for="blend-name">Blend Name</label>
+                        <input type="text" id="blend-name" placeholder="My Custom Blend">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button id="save-blend-confirm">Save</button>
+                    <button id="cancel-blend-save">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>DOUGH_FORMULATOR &copy; 2025 | <a href="#" id="about-link">About</a></p>
+    </footer>
+
+    <script src="js/calculator.js"></script>
+    <script src="js/timeline.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+
+    <style>
+        .input-with-lock {
+            display: flex;
+            align-items: center;
+        }
+        
+        .input-with-lock input {
+            flex: 1;
+        }
+        
+        .lock-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            margin-left: 5px;
+            padding: 5px;
+            color: #666;
+        }
+        
+        .lock-toggle.locked {
+            color: #e67e22;
+        }
+        
+        .lock-toggle .fa-lock,
+        .lock-toggle .fa-unlock {
+            font-size: 16px;
+        }
+        
+        .input-with-unit {
+            display: flex;
+            flex: 1;
+        }
+        
+        .starter-input-row {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</body>
+</html>

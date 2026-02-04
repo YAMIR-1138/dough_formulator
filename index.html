@@ -2,304 +2,287 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Professional sourdough calculator for precise baking formulas">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="Simple sourdough calculator - calculate your perfect loaf">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
 
-    <title>DOUGH_FORMULATOR | Almost Professional Sourdough Calculator</title>
+    <title>DOUGH_FORMULATOR</title>
 
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <header>
-            <div class="brand">
-                <h1>DOUGH_<span class="accent">FORMULATOR</span></h1>
-                <div class="tagline">Calculate. Ferment. Ascend.</div>
+    <div class="app">
+        <header class="app-header">
+            <h1>DOUGH_FORMULATOR</h1>
+            <div class="header-actions">
+                <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                    </svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
             </div>
-            <button id="theme-toggle-btn" aria-label="Toggle dark mode">
-                <i class="fas fa-moon"></i>
-            </button>
         </header>
 
-        <main>
-            <section id="calculator" class="card">
-                <div class="calculator-header">
-                    <h2>Recipe Calculator</h2>
-                    <div class="active-anchor">
-                        <span>Active locks:</span>
-                        <span id="active-locks-display">None</span>
-                        <span class="tooltip">
-                            <i class="fas fa-info-circle"></i>
-                            <span class="tooltip-text">Lock the values you want to keep fixed. The calculator will adjust other values accordingly.</span>
-                        </span>
-                    </div>
-                </div>
+        <main class="calculator">
+            <!-- Recipe Name -->
+            <div class="card recipe-name-card">
+                <input type="text" id="recipe-name" class="recipe-name-input" placeholder="Recipe name..." value="My Sourdough">
+                <span class="recipe-status" id="recipe-status">Unsaved</span>
+            </div>
 
-                <div id="calculator-form" class="calculator-form">
-                    <div class="input-group">
-                        <label for="dough-weight">Dough Weight (g)</label>
-                        <div class="input-with-lock">
-                            <input type="number" id="dough-weight" name="dough-weight" value="1000" min="0" step="1">
-                            <button type="button" class="lock-toggle" data-field="doughWeight">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                            <input type="range" id="dough-weight-slider" class="range-slider" min="500" max="5000" value="1000" step="50">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="flour-weight">Flour Weight (g)</label>
-                        <div class="input-with-lock">
-                            <input type="number" id="flour-weight" name="flour-weight" value="500" min="0" step="1">
-                            <button type="button" class="lock-toggle" data-field="flourWeight">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                            <input type="range" id="flour-weight-slider" class="range-slider" min="100" max="2000" value="500" step="10">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="hydration">Hydration (%)</label>
-                        <div class="input-with-lock">
-                            <input type="number" id="hydration" name="hydration" value="75" min="0" max="200" step="1">
-                            <button type="button" class="lock-toggle" data-field="hydration">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                            <input type="range" id="hydration-slider" class="range-slider" min="0" max="200" value="75" step="1">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="starter-amount">Starter Amount</label>
-                        <div class="starter-input-row">
-                            <div class="input-with-unit">
-                                <input type="number" id="starter-amount" name="starter-amount" value="20" min="0" step="1">
-                                <select id="starter-unit" name="starter-unit">
-                                    <option value="percentage">%</option>
-                                    <option value="grams">g</option>
-                                </select>
-                            </div>
-                            <button type="button" class="lock-toggle" data-field="starter">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="starter-amount-slider-container" style="display: none; width: 100%; padding-top: 10px;">
-                        <input type="range" id="starter-amount-slider" class="range-slider" min="0" max="500" value="20" step="5">
-                    </div>
-                    <div class="input-group">
-                        <label for="salt-percentage">Salt (%)</label>
-                        <div class="input-with-lock">
-                            <input type="number" id="salt-percentage" name="salt-percentage" value="2" min="0" max="20" step="0.1">
-                            <button type="button" class="lock-toggle" data-field="salt">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                            <input type="range" id="salt-percentage-slider" class="range-slider" min="0" max="20" value="2" step="0.1">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="starter-hydration">Starter Hydration (%)</label>
-                        <div class="input-with-lock">
-                            <input type="number" id="starter-hydration" name="starter-hydration" value="100" min="30" max="200" step="5">
-                            <button type="button" class="lock-toggle" data-field="starterHydration">
-                                <i class="fas fa-unlock"></i>
-                            </button>
-                            <input type="range" id="starter-hydration-slider" class="range-slider" min="30" max="200" value="100" step="5">
-                        </div>
-                    </div>
+            <!-- Total Flour -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Total Flour</span>
+                    <span class="card-value" id="total-flour-display">700g</span>
                 </div>
-
-                <div class="flour-blend-advanced" id="flour-blend-advanced">
-                    <h3>Flour Blend</h3>
-                    <div id="flour-items-container">
-                        <!-- Flour items will be added dynamically -->
-                    </div>
-                    <button id="add-flour-btn"><i class="fas fa-plus"></i> Add Flour</button>
-                    <div class="flour-presets">
-                        <button id="save-blend-btn">Save Blend</button>
-                        <select id="flour-presets">
-                            <option value="">Load Saved Blend</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
-
-            <section id="recipe-results" class="card">
-                <h2>Formula</h2>
-                <div class="recipe-summary">
-                    <div class="recipe-total">
-                        <span>Total Dough Weight:</span>
-                        <span id="result-dough-weight">1220g</span>
-                    </div>
-                    <div class="recipe-hydration">
-                        <span>Hydration:</span>
-                        <span id="result-hydration">75%</span>
-                    </div>
-                </div>
-                <div class="recipe-ingredients">
-                    <h3>Ingredients</h3>
-                    <ul id="ingredients-list">
-                        <li><span>Total Flour:</span> <span id="result-flour">1000g</span></li>
-                        <li><span>Flour to add:</span> <span id="result-flour-to-add">900g</span></li>
-                        <li><span>Total Water:</span> <span id="result-water">750g</span></li>
-                        <li><span>Water to add:</span> <span id="result-water-to-add">650g</span></li>
-                        <li><span>Starter:</span> <span id="result-starter">200g</span> <span class="ingredient-note">(contains <span id="result-starter-flour">100g</span> flour and <span id="result-starter-water">100g</span> water)</span></li>
-                        <li><span>Salt:</span> <span id="result-salt">20g</span></li>
-                    </ul>
-                </div>
-                <div class="recipe-flour-breakdown">
-                    <h3>Flour Breakdown</h3>
-                    <ul id="flour-breakdown-list">
-                        <!-- Flour breakdown will be filled dynamically -->
-                    </ul>
-                </div>
-                <div class="recipe-actions">
-                    <button id="save-recipe-btn"><i class="fas fa-save"></i> Save Formula</button>
-                    <button id="copy-recipe-btn"><i class="fas fa-copy"></i> Copy Formula</button>
-                </div>
-            </section>
-
-            <section id="timeline" class="card" style="display: none;">
-                <div class="section-header">
-                    <h2>Baking Timeline</h2>
-                    <button id="toggle-timeline-btn" class="toggle-section" aria-label="Toggle timeline visibility">
-                        <i class="fas fa-chevron-up"></i>
-                    </button>
-                </div>
-                <div id="timeline-content">
-                    <div class="timeline-inputs">
-                        <div class="timeline-start">
-                            <label for="timeline-mode">Calculate from:</label>
-                            <select id="timeline-mode">
-                                <option value="start">Start Time</option>
-                                <option value="end">Ready Time</option>
-                            </select>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="timeline-date">Date & Time</label>
-                            <input type="datetime-local" id="timeline-date">
-                        </div>
-
-                        <div class="input-group">
-                            <label for="room-temp">Room Temperature</label>
-                            <div class="slider-with-value temp-input">
-                                <input type="range" id="room-temp-slider" min="18" max="30" value="22" step="1">
-                                <input type="number" id="room-temp" value="22" min="18" max="30" step="1">
-                                <button id="temp-unit-toggle" class="unit-toggle">°C</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="timeline-schedule">
-                        <h3>Schedule</h3>
-                        <ul id="timeline-steps">
-                            <!-- Timeline steps will be filled dynamically -->
-                        </ul>
-                    </div>
-                </div>
-            </section>
-
-            <section id="saved-recipes" class="card">
-                <h2>Saved Formulas</h2>
-                <div class="recipes-list" id="recipes-container">
-                    <!-- Saved formulas will be displayed here -->
-                    <p id="no-recipes-message">No saved formulas yet.</p>
-                </div>
-                <div class="recipes-actions">
-                    <button id="export-recipes-btn"><i class="fas fa-file-export"></i> Export Formulas</button>
-                    <label for="import-recipes-input" class="button">
-                        <i class="fas fa-file-import"></i> Import Formulas
-                    </label>
-                    <input type="file" id="import-recipes-input" accept=".json" style="display: none;">
-                </div>
-            </section>
-        </main>
-
-        <div id="recipe-modal" class="modal">
-            <div class="modal-content">
-                <span class="close-modal">&times;</span>
-                <h2>Save Formula</h2>
-                <div class="recipe-form">
-                    <div class="input-group">
-                        <label for="recipe-name">Formula Name</label>
-                        <input type="text" id="recipe-name" placeholder="My Sourdough Formula">
-                    </div>
-                    <div class="input-group">
-                        <label for="recipe-notes">Notes (optional)</label>
-                        <textarea id="recipe-notes" placeholder="Any special notes about this formula"></textarea>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button id="save-recipe-confirm">Save</button>
-                    <button id="cancel-save">Cancel</button>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="total-flour" data-delta="-50">−</button>
+                    <input type="range" id="total-flour" class="slider" min="200" max="2000" value="700" step="10">
+                    <button class="adjust-btn" data-target="total-flour" data-delta="50">+</button>
                 </div>
             </div>
-        </div>
 
-        <div id="flour-modal" class="modal">
-            <div class="modal-content">
-                <span class="close-modal">&times;</span>
-                <h2>Save Flour Blend</h2>
-                <div class="flour-blend-form">
-                    <div class="input-group">
-                        <label for="blend-name">Blend Name</label>
-                        <input type="text" id="blend-name" placeholder="My Custom Blend">
+            <!-- Hydration -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Hydration</span>
+                    <span class="card-value" id="hydration-display">75%</span>
+                </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="hydration" data-delta="-1">−</button>
+                    <input type="range" id="hydration" class="slider" min="50" max="100" value="75" step="1">
+                    <button class="adjust-btn" data-target="hydration" data-delta="1">+</button>
+                </div>
+                <div class="card-detail">
+                    <span>Water</span>
+                    <span id="water-display">525g</span>
+                </div>
+            </div>
+
+            <!-- Starter -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Starter</span>
+                    <span class="card-value" id="starter-display">150g</span>
+                </div>
+                <div class="card-subtitle">
+                    <span id="starter-flour-pct">(21.4% of flour)</span>
+                    <span id="starter-total-pct">(10.9% of total)</span>
+                </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="starter" data-delta="-10">−</button>
+                    <input type="range" id="starter" class="slider" min="50" max="400" value="150" step="10">
+                    <button class="adjust-btn" data-target="starter" data-delta="10">+</button>
+                </div>
+            </div>
+
+            <!-- Starter Hydration -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Starter Hydration</span>
+                    <span class="card-value" id="starter-hydration-display">100%</span>
+                </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="starter-hydration" data-delta="-5">−</button>
+                    <input type="range" id="starter-hydration" class="slider" min="50" max="150" value="100" step="5">
+                    <button class="adjust-btn" data-target="starter-hydration" data-delta="5">+</button>
+                </div>
+            </div>
+
+            <!-- Salt -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Salt to Flour Ratio</span>
+                    <span class="card-value" id="salt-pct-display">2.0%</span>
+                </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="salt-pct" data-delta="-0.1">−</button>
+                    <input type="range" id="salt-pct" class="slider" min="1" max="4" value="2" step="0.1">
+                    <button class="adjust-btn" data-target="salt-pct" data-delta="0.1">+</button>
+                </div>
+                <div class="card-detail">
+                    <span>Salt</span>
+                    <span id="salt-display">14g</span>
+                </div>
+            </div>
+
+            <!-- Two Flour Toggle -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Use 2 types of flour?</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="two-flour-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Flour Blend (hidden by default) -->
+            <div class="card" id="flour-blend-card" style="display: none;">
+                <div class="card-header">
+                    <span class="card-label">Main Flour %</span>
+                    <span class="card-value" id="main-flour-pct-display">80%</span>
+                </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="main-flour-pct" data-delta="-5">−</button>
+                    <input type="range" id="main-flour-pct" class="slider" min="50" max="100" value="80" step="5">
+                    <button class="adjust-btn" data-target="main-flour-pct" data-delta="5">+</button>
+                </div>
+                <div class="flour-split">
+                    <div class="flour-split-item">
+                        <span class="flour-split-label">Main:</span>
+                        <span class="flour-split-value" id="main-flour-display">560g</span>
+                    </div>
+                    <div class="flour-split-item">
+                        <span class="flour-split-label">2nd:</span>
+                        <span class="flour-split-value" id="second-flour-display">140g</span>
                     </div>
                 </div>
-                <div class="modal-actions">
-                    <button id="save-blend-confirm">Save</button>
-                    <button id="cancel-blend-save">Cancel</button>
+            </div>
+
+            <!-- Loaves -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-label">Split into # of Loaves</span>
+                    <span class="card-value" id="num-loaves-display">2</span>
                 </div>
+                <div class="slider-row">
+                    <button class="adjust-btn" data-target="num-loaves" data-delta="-1">−</button>
+                    <input type="range" id="num-loaves" class="slider" min="1" max="8" value="2" step="1">
+                    <button class="adjust-btn" data-target="num-loaves" data-delta="1">+</button>
+                </div>
+            </div>
+
+            <!-- Results Summary -->
+            <div class="card results-card">
+                <div class="results-header">
+                    <span class="results-title">Total Dough</span>
+                    <span class="results-total" id="total-dough-display">1375g</span>
+                </div>
+                <div class="results-loaf">
+                    <span>Loaf Weight</span>
+                    <span id="loaf-weight-display">688g</span>
+                </div>
+                <div class="results-divider"></div>
+                <div class="results-grid">
+                    <div class="result-item">
+                        <span class="result-label">Flour to add</span>
+                        <span class="result-value" id="flour-to-add-display">625g</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Water to add</span>
+                        <span class="result-value" id="water-to-add-display">450g</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Starter</span>
+                        <span class="result-value" id="result-starter-display">150g</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Salt</span>
+                        <span class="result-value" id="result-salt-display">14g</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Baking Settings -->
+            <div class="card">
+                <div class="card-section-title">Baking</div>
+                <div class="baking-row">
+                    <div class="baking-item">
+                        <span class="baking-label">Temp 1</span>
+                        <div class="baking-input-row">
+                            <button class="adjust-btn small" data-target="bake-temp-1" data-delta="-5">−</button>
+                            <span class="baking-value" id="bake-temp-1-display">450°F</span>
+                            <button class="adjust-btn small" data-target="bake-temp-1" data-delta="5">+</button>
+                        </div>
+                        <input type="range" id="bake-temp-1" class="slider" min="400" max="500" value="450" step="5">
+                    </div>
+                    <div class="baking-item">
+                        <span class="baking-label">Time 1</span>
+                        <div class="baking-input-row">
+                            <button class="adjust-btn small" data-target="bake-time-1" data-delta="-1">−</button>
+                            <span class="baking-value" id="bake-time-1-display">20 min</span>
+                            <button class="adjust-btn small" data-target="bake-time-1" data-delta="1">+</button>
+                        </div>
+                        <input type="range" id="bake-time-1" class="slider" min="10" max="40" value="20" step="1">
+                    </div>
+                </div>
+                <div class="baking-row">
+                    <div class="baking-item">
+                        <span class="baking-label">Temp 2</span>
+                        <div class="baking-input-row">
+                            <button class="adjust-btn small" data-target="bake-temp-2" data-delta="-5">−</button>
+                            <span class="baking-value" id="bake-temp-2-display">425°F</span>
+                            <button class="adjust-btn small" data-target="bake-temp-2" data-delta="5">+</button>
+                        </div>
+                        <input type="range" id="bake-temp-2" class="slider" min="350" max="475" value="425" step="5">
+                    </div>
+                    <div class="baking-item">
+                        <span class="baking-label">Time 2</span>
+                        <div class="baking-input-row">
+                            <button class="adjust-btn small" data-target="bake-time-2" data-delta="-1">−</button>
+                            <span class="baking-value" id="bake-time-2-display">25 min</span>
+                            <button class="adjust-btn small" data-target="bake-time-2" data-delta="1">+</button>
+                        </div>
+                        <input type="range" id="bake-time-2" class="slider" min="10" max="40" value="25" step="1">
+                    </div>
+                </div>
+                <div class="temp-unit-toggle">
+                    <button id="temp-unit-btn" class="text-btn">Switch to °C</button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card actions-card">
+                <button id="save-btn" class="btn btn-primary">Save Recipe</button>
+                <button id="copy-btn" class="btn btn-secondary">Copy to Clipboard</button>
+            </div>
+
+            <!-- Saved Recipes -->
+            <div class="card" id="saved-recipes-card">
+                <div class="card-section-title">Saved Recipes</div>
+                <div id="saved-recipes-list" class="saved-recipes-list">
+                    <p class="empty-state">No saved recipes yet</p>
+                </div>
+                <div class="recipes-actions">
+                    <button id="export-btn" class="btn btn-small">Export All</button>
+                    <label class="btn btn-small">
+                        Import
+                        <input type="file" id="import-input" accept=".json" style="display: none;">
+                    </label>
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <p>DOUGH_FORMULATOR &copy; 2025</p>
+        </footer>
+    </div>
+
+    <!-- Save Modal -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <h2>Save Recipe</h2>
+            <input type="text" id="save-recipe-name" class="modal-input" placeholder="Recipe name">
+            <textarea id="save-recipe-notes" class="modal-textarea" placeholder="Notes (optional)"></textarea>
+            <div class="modal-actions">
+                <button id="save-confirm" class="btn btn-primary">Save</button>
+                <button id="save-cancel" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
 
-    <footer>
-        <p>DOUGH_FORMULATOR &copy; 2025 | <a href="#" id="about-link">About</a></p>
-    </footer>
-
     <script src="js/calculator.js"></script>
-    <script src="js/timeline.js"></script>
     <script src="js/storage.js"></script>
-    <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
-
-    <style>
-        .input-with-lock {
-            display: flex;
-            align-items: center;
-        }
-        
-        .input-with-lock input {
-            flex: 1;
-        }
-        
-        .lock-toggle {
-            background: none;
-            border: none;
-            cursor: pointer;
-            margin-left: 5px;
-            padding: 5px;
-            color: var(--text-light);
-            transition: all 0.2s ease;
-        }
-        
-        .lock-toggle.locked {
-            color: var(--accent-color);
-        }
-        
-        .lock-toggle .fa-lock,
-        .lock-toggle .fa-unlock {
-            font-size: 16px;
-        }
-        
-        .input-with-unit {
-            display: flex;
-            flex: 1;
-        }
-        
-        .starter-input-row {
-            display: flex;
-            align-items: center;
-        }
-    </style>
 </body>
 </html>

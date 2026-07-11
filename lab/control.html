@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Mission Control — your bake as a ribbon of time. Drag the bake; the schedule reflows.">
+    <title>Ⅲ Mission Control — THE LAB</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+    <div class="page wide">
+        <nav id="lab-nav"></nav>
+
+        <div class="control-header">
+            <header>
+                <span class="smallcaps">experiment Ⅲ</span>
+                <h2>Mission Control</h2>
+                <span class="mode-note caption" id="mode-note"></span>
+            </header>
+            <div class="thermo no-print">
+                <span class="smallcaps">kitchen temperature</span>
+                <div class="thermo-row">
+                    <input type="range" id="temp-range" min="15" max="32" step="1" aria-label="Kitchen temperature">
+                    <span class="numeral" id="temp-readout"></span>
+                </div>
+                <span class="caption" id="temp-caption"></span>
+            </div>
+        </div>
+
+        <div class="ribbon-wrap" id="ribbon-wrap">
+            <svg id="ribbon" class="ribbon-svg" height="200" aria-label="Bake timeline ribbon"></svg>
+        </div>
+        <p class="caption no-print" style="margin-top:0.4rem">
+            Drag the paper to move your start · drag the <strong style="color:var(--accent)">bake</strong> to when you want bread · pull the right edge of the cold rest to stretch it.
+        </p>
+
+        <div class="control-layout">
+            <aside class="drawer">
+                <h3>Formula</h3>
+                <div id="formula-rows"></div>
+                <label class="fed-row caption">
+                    <input type="checkbox" id="fed-box"> starter already fed &amp; peaking
+                </label>
+            </aside>
+            <section>
+                <h3 style="margin-bottom:0.5rem">Flight plan</h3>
+                <div class="step-list" id="step-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <script type="module" src="control.js"></script>
+</body>
+</html>

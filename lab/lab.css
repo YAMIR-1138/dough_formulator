@@ -310,15 +310,15 @@ a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset:
 
 .doc .prose.secondary { font-size: var(--fs-body); }
 
-.doc .day-head { display: block; margin: 1.1rem 0 0.3rem; }
+.day-head { display: block; margin: 1.1rem 0 0.3rem; }
 
-.doc .sched-line { max-width: 42rem; padding-left: 4.6rem; text-indent: -4.6rem; margin-bottom: 0.35rem; }
+.sched-line { max-width: 42rem; padding-left: 4.6rem; text-indent: -4.6rem; margin-bottom: 0.35rem; }
 
-.doc .sched-time {
+.sched-time {
     font-family: var(--font-mono);
     font-size: 0.85em;
     color: var(--accent);
-    padding-right: 0.6rem;
+    margin-right: 0.6rem;
     font-variant-numeric: tabular-nums;
 }
 
@@ -445,6 +445,137 @@ a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset:
 }
 
 .detail-panel .batch .numeral { font-size: 1.15rem; }
+
+/* ---------- Ⅲ Mission Control ---------- */
+
+.control-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+}
+
+.thermo {
+    min-width: 15rem;
+    flex: 0 1 20rem;
+}
+
+.thermo .thermo-row { display: flex; align-items: center; gap: 0.7rem; }
+
+.thermo input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+.thermo .numeral { font-size: 1.15rem; white-space: nowrap; }
+
+.mode-note { margin-top: 0.15rem; display: block; }
+
+.ribbon-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 0.4rem 0;
+    touch-action: pan-x;
+}
+
+.ribbon-svg { display: block; user-select: none; -webkit-user-select: none; }
+
+.ribbon-svg .shade-night { fill: var(--night); opacity: 0.09; }
+
+.ribbon-svg .day-label {
+    font-family: var(--font-text);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.12em;
+    font-size: 13px;
+    fill: var(--ink-soft);
+}
+
+.ribbon-svg .block rect { rx: 3; }
+
+.ribbon-svg .block { cursor: grab; }
+
+.ribbon-svg .block.draggable-target { cursor: ew-resize; }
+
+.ribbon-svg .block-label {
+    font-family: var(--font-text);
+    font-size: 13.5px;
+    fill: var(--ink);
+}
+
+.ribbon-svg .block-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--ink-soft);
+}
+
+.ribbon-svg .block-badge {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    fill: var(--ink-soft);
+}
+
+.ribbon-svg .zigzag { stroke: var(--ink-soft); stroke-width: 1; fill: none; opacity: 0.7; }
+
+.ribbon-svg .now-line { stroke: var(--accent); stroke-width: 2; }
+
+.ribbon-svg .now-flag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--accent);
+    font-weight: 500;
+}
+
+.ribbon-svg .bg { fill: transparent; cursor: grab; }
+
+/* Blocks and grips drag on touch; the background keeps native pan-x scroll */
+.ribbon-svg .block, .ribbon-svg .retard-grip { touch-action: none; }
+
+.ribbon-svg .retard-grip { cursor: ew-resize; }
+
+.ribbon-svg .retard-grip line { stroke: var(--water); stroke-width: 3; }
+
+.control-layout {
+    display: grid;
+    grid-template-columns: minmax(16rem, 22rem) 1fr;
+    gap: 2rem;
+    margin-top: 1.4rem;
+    align-items: start;
+}
+
+@media (max-width: 760px) {
+    .control-layout { grid-template-columns: 1fr; }
+}
+
+.drawer {
+    background: var(--paper-deep);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 1.1rem 1.2rem;
+}
+
+.drawer h3 { margin-bottom: 0.5rem; }
+
+.drawer .formula-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.4rem 0;
+    border-bottom: 1px dashed var(--rule);
+    gap: 1rem;
+}
+
+.drawer .formula-row:last-of-type { border-bottom: none; }
+
+.drawer .formula-row .caption { flex: 1; }
+
+.drawer .fed-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.7rem; }
+
+.drawer .fed-row input { accent-color: var(--accent); }
+
+.step-list { margin-top: 0.2rem; }
+
+.step-list .sched-line { padding-left: 4.2rem; text-indent: -4.2rem; margin-bottom: 0.3rem; font-size: 0.95rem; }
 
 /* ---------- shared print ---------- */
 

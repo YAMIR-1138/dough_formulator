@@ -6,6 +6,7 @@ import { run } from './assert.js';
 import './model.test.js';
 import './ferment.test.js';
 import './share.test.js';
+import './lab.test.js';
 
 const summary = run();
 

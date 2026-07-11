@@ -608,6 +608,13 @@ footer {
     letter-spacing: 0.1em;
 }
 
+footer a {
+    color: var(--accent-color);
+    text-underline-offset: 3px;
+}
+
+footer a:hover { color: var(--primary-color); }
+
 /* ---------- Print: the bake sheet ---------- */
 
 .print-only { display: none; }

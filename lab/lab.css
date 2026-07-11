@@ -1,0 +1,334 @@
+/* THE LAB — warm editorial design system.
+   Cream paper, serif display, generous whitespace. The anti-app. */
+
+:root {
+    --paper: #F6F1E7;
+    --paper-deep: #EDE5D3;
+    --ink: #2B2118;
+    --ink-soft: #6E5D4B;
+    --rule: #D8CCB6;
+    --accent: #B4552D;
+    --accent-soft: #E9CDBD;
+    --water: #6C8CA3;
+    --starter: #C9973F;
+    --salt: #9A9184;
+    --flour-bread: #EADDC2;
+    --flour-ap: #F0E6CF;
+    --flour-ww: #B78A57;
+    --flour-rye: #8A6642;
+    --flour-spelt: #C7A167;
+    --flour-semolina: #E2C778;
+    --night: #3E3629;
+    --good: #7A8450;
+
+    --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    --font-text: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+    --fs-caption: 0.8125rem;
+    --fs-body: 1.0625rem;
+    --fs-lede: 1.33rem;
+    --fs-h3: 1.66rem;
+    --fs-h2: 2.07rem;
+    --space: 1.5rem;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+    font-family: var(--font-text);
+    font-size: var(--fs-body);
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Paper grain + vignette (pure CSS/SVG, no assets) */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 40;
+    opacity: 0.035;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 39;
+    background: radial-gradient(ellipse at 50% 0%, transparent 60%, rgba(43, 33, 24, 0.05));
+}
+
+/* ---------- typography ---------- */
+
+h1, h2, h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 500;
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+}
+
+h1 { font-size: clamp(2.6rem, 7vw, 4.05rem); font-weight: 600; }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); }
+
+.dek {
+    font-style: italic;
+    font-size: var(--fs-lede);
+    color: var(--ink-soft);
+    max-width: 34rem;
+}
+
+.smallcaps {
+    font-family: var(--font-text);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.14em;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+}
+
+.numeral {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.caption {
+    font-style: italic;
+    font-size: var(--fs-caption);
+    color: var(--ink-soft);
+}
+
+hr.rule {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: var(--space) 0;
+}
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+::selection { background: var(--accent-soft); }
+
+/* ---------- page scaffold ---------- */
+
+.page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 5rem;
+}
+
+.page.wide { max-width: 72rem; }
+
+/* ---------- concept switcher ---------- */
+
+.lab-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.3rem;
+    padding: 0.8rem 0;
+    margin-bottom: calc(var(--space) * 1.4);
+    border-bottom: 1px solid var(--rule);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.12em;
+    font-size: 0.95rem;
+}
+
+.lab-nav a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.lab-nav a:hover { color: var(--ink); }
+
+.lab-nav a[aria-current="page"] { color: var(--accent); }
+
+.lab-nav a[aria-current="page"]::before { content: '● '; font-size: 0.6em; vertical-align: 2px; }
+
+/* ---------- tokens (tappable values) ---------- */
+
+.token {
+    font: inherit;
+    font-family: var(--font-display);
+    font-weight: 500;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline dotted 1.5px;
+    text-underline-offset: 3px;
+    padding: 0.1em 0.15em;
+    margin: -0.1em -0.15em;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+}
+
+.token:hover, .token[aria-expanded="true"] { background: var(--accent-soft); }
+
+.flash { animation: lab-flash 0.7s ease-out; border-radius: 3px; }
+
+@keyframes lab-flash {
+    0% { background-color: var(--accent-soft); }
+    100% { background-color: transparent; }
+}
+
+/* ---------- popover ---------- */
+
+.popover {
+    position: fixed;
+    z-index: 50;
+    width: min(20rem, calc(100vw - 16px));
+    background: var(--paper-deep);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(43, 33, 24, 0.14);
+    padding: 0.9rem 1rem 1rem;
+}
+
+.popover.sheet {
+    inset: auto 0 0 0;
+    width: 100%;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.popover-label { display: block; margin-bottom: 0.15rem; }
+
+.popover-value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.3rem;
+}
+
+.popover-row { display: flex; align-items: center; gap: 0.6rem; }
+
+.popover-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+.popover-row input[type="datetime-local"] {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 0.4rem 0.5rem;
+}
+
+.popover-step {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.popover-step:hover { border-color: var(--accent); color: var(--accent); }
+
+.popover-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; }
+
+.chip {
+    font-family: var(--font-text);
+    font-size: 0.95rem;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.chip.active { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+/* ---------- hub (table of contents) ---------- */
+
+.hub-masthead { padding: 3rem 0 1.2rem; }
+
+.hub-masthead .over { margin-bottom: 0.8rem; display: block; }
+
+.toc { list-style: none; margin-top: calc(var(--space) * 1.5); }
+
+.toc li { border-top: 1px solid var(--rule); }
+
+.toc li:last-child { border-bottom: 1px solid var(--rule); }
+
+.toc a {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr auto;
+    gap: 1.2rem;
+    align-items: center;
+    padding: 1.6rem 0.2rem;
+    text-decoration: none;
+    color: var(--ink);
+}
+
+.toc a:hover h3 { color: var(--accent); }
+
+.toc .roman {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    color: var(--ink-soft);
+    text-align: center;
+}
+
+.toc p { color: var(--ink-soft); font-size: 0.98rem; max-width: 34rem; }
+
+.toc .vignette { width: 84px; height: 64px; flex: none; }
+
+.toc .vignette * { stroke: var(--ink-soft); fill: none; stroke-width: 1.6; }
+
+.hub-footer { margin-top: calc(var(--space) * 2); }
+
+@media (max-width: 560px) {
+    .toc a { grid-template-columns: 2.2rem 1fr; }
+    .toc .vignette { display: none; }
+}
+
+/* ---------- Ⅰ The Living Recipe ---------- */
+
+.doc { margin-top: 0.5rem; }
+
+.doc section { margin-bottom: calc(var(--space) * 1.6); }
+
+.doc .section-head { margin-bottom: 0.7rem; display: block; }
+
+.doc .prose { font-size: var(--fs-lede); line-height: 1.75; max-width: 42rem; }
+
+.doc .prose.secondary { font-size: var(--fs-body); }
+
+.doc .day-head { display: block; margin: 1.1rem 0 0.3rem; }
+
+.doc .sched-line { max-width: 42rem; padding-left: 4.6rem; text-indent: -4.6rem; margin-bottom: 0.35rem; }
+
+.doc .sched-time {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--accent);
+    padding-right: 0.6rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.doc .footnote { font-size: var(--fs-caption); color: var(--ink-soft); font-style: italic; margin-top: 0.6rem; }
+
+/* ---------- shared print ---------- */
+
+@media print {
+    body::before, body::after, .lab-nav, .no-print { display: none !important; }
+    body { background: #fff; }
+    .token { color: var(--ink); text-decoration: none; }
+    .page { padding: 0; max-width: none; }
+}

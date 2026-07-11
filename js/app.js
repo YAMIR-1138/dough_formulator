@@ -99,6 +99,9 @@ function syncHash() {
         mode: env.mode,
     });
     history.replaceState(null, '', location.pathname + location.search + hash);
+    // Keep the LAB link carrying the current formula
+    const labLink = $('lab-link');
+    if (labLink) labLink.href = 'lab/' + hash;
 }
 
 /* ---------- formula edits ---------- */

@@ -198,7 +198,7 @@ function startRuler(boundaryId, target) {
     const { state } = store.get();
     const recipe = model.derive(state);
     const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity });
+    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
     const ticks = [];
 
     if (boundaryId === '__surface__') {
@@ -253,12 +253,31 @@ function selectBandAt(y) {
     const { state } = store.get();
     const recipe = model.derive(state);
     const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity });
-    const grams = scale.gramsAt(y);
+    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
+
+    // Band pixel ranges, bottom→top
     let cum = 0;
-    for (const layer of layers) {
+    const ranges = layers.map(layer => {
+        const y0 = scale.yOf(cum);
         cum += layer.grams;
-        if (grams <= cum) { selected = layer.id; return; }
+        const y1 = scale.yOf(cum);
+        return { layer, top: y1, bottom: y0, height: y0 - y1 };
+    });
+
+    // A thin band (salt seam, a 5% flour) is nearly impossible to hit
+    // exactly — if the tap lands within 9px of one, it wins.
+    let best = null;
+    for (const range of ranges) {
+        if (range.height < 20) {
+            const mid = (range.top + range.bottom) / 2;
+            const dist = Math.abs(y - mid);
+            if (dist < 9 && (!best || dist < best.dist)) best = { layer: range.layer, dist };
+        }
+    }
+    if (best) { selected = best.layer.id; return; }
+
+    for (const range of ranges) {
+        if (y >= range.top && y <= range.bottom) { selected = range.layer.id; return; }
     }
 }
 
@@ -266,7 +285,7 @@ function handleDrag(boundaryId, y) {
     const { state } = store.get();
     const recipe = model.derive(state);
     const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity });
+    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
     prevCapacity = scale.capacity;
 
     const gramsAtY = Math.max(0, scale.gramsAt(Math.min(JAR.bottom, Math.max(JAR.top, y))));
@@ -322,7 +341,7 @@ function render(state) {
         rebuildStructure(layers);
     }
 
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity: dragging ? prevCapacity : null });
+    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: dragging });
     prevCapacity = scale.capacity;
 
     // Bands + boundaries
@@ -410,24 +429,21 @@ const DETAIL = {
     },
 };
 
-function renderDetail(recipe, state) {
-    const panel = $('detail');
-    panel.innerHTML = '';
-
-    let def;
+function detailDef(recipe) {
     const flourMatch = /^flour-(\d+)$/.exec(selected);
     if (flourMatch) {
         const i = Number(flourMatch[1]);
-        const f = recipe.flourBreakdown[i];
-        if (f) {
-            def = {
-                title: model.FLOUR_TYPES[f.key]?.label || f.key,
-                grams: () => `${displayGrams(f.added)} g to add (${displayGrams(f.total)} g of the total flour)`,
-                caption: () => (model.FLOUR_TYPES[f.key]?.wholeGrain
-                    ? 'A whole grain — it drinks more water and ferments faster.'
-                    : 'A white flour — structure, lift, and an open crumb.'),
+        if (recipe.flourBreakdown[i]) {
+            // Look flour data up per-call so in-place updates never go stale
+            const f = r => r.flourBreakdown[i];
+            return {
+                title: r => model.FLOUR_TYPES[f(r).key]?.label || f(r).key,
+                grams: r => `${displayGrams(f(r).added)} g to add (${displayGrams(f(r).total)} g of the total flour)`,
+                caption: r => (model.FLOUR_TYPES[f(r).key]?.wholeGrain
+                    ? 'A whole grain — it drinks more water and ferments faster. Adjust below, or drag this band’s lower handle.'
+                    : 'A white flour — structure, lift, and an open crumb. Adjust below, or drag this band’s lower handle.'),
                 control: (r, s) => ({
-                    label: `${model.FLOUR_TYPES[f.key]?.label} share`, value: f.pct, min: 2, max: 100, step: 1, unit: '%',
+                    label: 'share', value: f(r).pct, min: 2, max: 100, step: 1, unit: '%',
                     apply: v => {
                         const flours = s.flours.map((fl, fi) => ({ key: fl.key, pct: fi === i ? v : fl.pct }));
                         return model.setFlourBlend(s, flours);
@@ -436,43 +452,89 @@ function renderDetail(recipe, state) {
             };
         }
     }
-    def = def || DETAIL[selected] || DETAIL.water;
+    const d = DETAIL[selected] || DETAIL.water;
+    return { ...d, title: () => d.title };
+}
 
-    panel.appendChild(el('h3', {}, def.title));
-    panel.appendChild(el('div', { class: 'grams-line' }, def.grams(recipe)));
-    panel.appendChild(el('span', { class: 'caption' }, def.caption(recipe)));
+// The panel is built once per selection and then updated IN PLACE — the
+// slider must never be rebuilt mid-drag (that's what made phones stutter).
+let detailKey = '';
+let detailRefs = null;
+
+function renderDetail(recipe, state) {
+    const key = `${selected}|${state.flours.length}`;
+    const def = detailDef(recipe);
+
+    if (key !== detailKey || !detailRefs) {
+        detailKey = key;
+        buildDetail(def, recipe, state);
+    }
+    updateDetail(def, recipe, state);
+}
+
+function buildDetail(def, recipe, state) {
+    const panel = $('detail');
+    panel.innerHTML = '';
+    const r = (detailRefs = { sliderBusy: false });
+
+    r.title = el('h3', {}, '');
+    r.grams = el('div', { class: 'grams-line' }, '');
+    r.caption = el('span', { class: 'caption' }, '');
+    panel.append(r.title, r.grams, r.caption);
 
     const c = def.control(recipe, state);
-    const readout = el('span', { class: 'numeral' }, `${round1(c.value)}${c.unit}`);
-    const slider = el('input', { type: 'range', min: c.min, max: c.max, step: c.step, value: c.value });
+    r.readout = el('span', { class: 'numeral' }, '');
+    r.slider = el('input', { type: 'range', min: c.min, max: c.max, step: c.step, value: c.value });
     const setVal = v => {
         const clamped = Math.min(c.max, Math.max(c.min, v));
-        slider.value = String(clamped);
-        readout.textContent = `${round1(clamped)}${c.unit}`;
-        store.apply(s => def.control(recipe, s).apply(clamped));
+        r.slider.value = String(clamped);
+        r.readout.textContent = `${round1(clamped)}${c.unit}`;
+        store.apply(s => detailDef(model.derive(s)).control(model.derive(s), s).apply(clamped));
     };
-    slider.addEventListener('input', () => setVal(Number(slider.value)));
+    r.slider.addEventListener('input', () => setVal(Number(r.slider.value)));
+    // While a finger is on the slider, render must not write to it
+    r.slider.addEventListener('pointerdown', () => { r.sliderBusy = true; });
+    for (const evt of ['pointerup', 'pointercancel', 'change', 'blur']) {
+        r.slider.addEventListener(evt, () => { r.sliderBusy = false; store.rerender(); });
+    }
     const minusBtn = el('button', { class: 'popover-step', type: 'button' }, '−');
     const plusBtn = el('button', { class: 'popover-step', type: 'button' }, '+');
-    minusBtn.addEventListener('click', () => setVal(Number(slider.value) - c.step));
-    plusBtn.addEventListener('click', () => setVal(Number(slider.value) + c.step));
-    panel.appendChild(el('div', { class: 'popover-row' }, minusBtn, slider, plusBtn, readout));
+    minusBtn.addEventListener('click', () => setVal(Number(r.slider.value) - c.step));
+    plusBtn.addEventListener('click', () => setVal(Number(r.slider.value) + c.step));
+    panel.appendChild(el('div', { class: 'popover-row' }, minusBtn, r.slider, plusBtn, r.readout));
 
     // Batch controls (always present)
     const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
     const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
     minus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves - 1)));
     plus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves + 1)));
+    r.batchWeight = el('span', { class: 'numeral' }, '');
+    r.loaves = el('span', {}, '');
+    r.perLoaf = el('span', { class: 'caption' }, '');
     panel.appendChild(el('div', { class: 'batch' },
-        el('span', { class: 'numeral' }, `${displayGrams(recipe.doughWeight)} g`),
-        el('span', { class: 'caption' }, 'of dough ·'),
-        minus,
-        el('span', {}, `${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`),
-        plus,
-        el('span', { class: 'caption' }, `${displayGrams(recipe.weightPerLoaf)} g each`)));
+        r.batchWeight, el('span', { class: 'caption' }, 'of dough ·'),
+        minus, r.loaves, plus, r.perLoaf));
 
-    panel.appendChild(el('p', { class: 'footnote' },
-        `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented flour · salt ${formatPct(recipe.saltPct)}%`));
+    r.footnote = el('p', { class: 'footnote' }, '');
+    panel.appendChild(r.footnote);
+}
+
+function updateDetail(def, recipe, state) {
+    const r = detailRefs;
+    r.title.textContent = def.title(recipe);
+    r.grams.textContent = def.grams(recipe);
+    r.caption.textContent = def.caption(recipe);
+
+    const c = def.control(recipe, state);
+    if (!r.sliderBusy && document.activeElement !== r.slider) {
+        r.slider.value = String(c.value);
+    }
+    r.readout.textContent = `${round1(Number(r.slider.value))}${c.unit}`;
+
+    r.batchWeight.textContent = `${displayGrams(recipe.doughWeight)} g`;
+    r.loaves.textContent = `${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`;
+    r.perLoaf.textContent = `${displayGrams(recipe.weightPerLoaf)} g each`;
+    r.footnote.textContent = `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented flour · salt ${formatPct(recipe.saltPct)}%`;
 }
 
 /* ---------- boot ---------- */

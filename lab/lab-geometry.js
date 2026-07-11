@@ -151,11 +151,14 @@ export function niceCeil(g) {
  * Map grams ↔ jar pixels. jarTopY/jarBottomY define the interior in SVG
  * units. Capacity leaves headroom above the dough.
  */
-export function makeJarScale(doughWeight, { jarTopY = 60, jarBottomY = 560, prevCapacity = null } = {}) {
+export function makeJarScale(doughWeight, { jarTopY = 60, jarBottomY = 560, prevCapacity = null, freeze = false } = {}) {
     let capacity = niceCeil(Math.max(doughWeight * 1.3, 1200));
     // Hysteresis: keep the previous capacity while the fill stays sane, so
-    // dragging doesn't rescale the ruler under the pointer.
-    if (prevCapacity) {
+    // dragging doesn't rescale the ruler under the pointer. With freeze,
+    // the previous capacity holds unconditionally (used during a live drag).
+    if (prevCapacity && freeze) {
+        capacity = prevCapacity;
+    } else if (prevCapacity) {
         const fill = doughWeight / prevCapacity;
         if (fill <= 0.92 && fill >= 0.30) capacity = prevCapacity;
     }

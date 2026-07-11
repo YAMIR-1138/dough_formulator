@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Pocket Dial — one decision per screen, one big satisfying dial.">
+    <title>Ⅳ Pocket Dial — THE LAB</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+    <div class="dial-app">
+        <nav id="lab-nav"></nav>
+        <main class="screens" id="screens"></main>
+        <footer class="dial-footer">
+            <button id="prev" aria-label="Previous">←</button>
+            <div class="dots" id="dots"></div>
+            <button id="next" aria-label="Next">→</button>
+        </footer>
+    </div>
+
+    <script type="module" src="dial.js"></script>
+</body>
+</html>

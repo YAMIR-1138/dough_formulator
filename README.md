@@ -62,6 +62,29 @@ starter — standard baker's math, consistent with how hydration is computed.
 - Printable bake sheet (Print → ingredients + schedule, no chrome).
 - Responsive, dark/light mode, offline-first — no server, no build step.
 
+## 🔬 THE LAB — four reimagined interfaces
+
+[`/lab/`](https://yamir-1138.github.io/dough_formulator/lab/) hosts four
+experimental UIs on the same math engine, in a warm editorial
+(typeset-cookbook) style. Your formula travels between all five apps
+through the share-hash — set 82% hydration anywhere and follow any link;
+it comes with you.
+
+- **Ⅰ The Living Recipe** — the formula as editable prose. Tap any
+  underlined value; the whole document (ingredients, day-by-day schedule)
+  rewrites itself live. Printing it gives you a recipe card.
+- **Ⅱ Dough Canvas** — the dough as a glass jar of layered ingredients.
+  Drag a layer boundary to change a ratio, pull the surface ring to scale
+  the batch, tap a layer to read about it.
+- **Ⅲ Mission Control** — the bake as a ribbon of time with a broken axis
+  (the cold retard is compressed with torn edges), day/night shading, and
+  a NOW cursor. Drag the paper to move your start, drag the bake block to
+  plan backward, stretch the cold rest, warm the kitchen and watch bulk
+  shrink (Q10).
+- **Ⅳ Pocket Dial** — mobile-first: one decision per screen on a big
+  rotary dial with editorial "wisdom" captions, ending on a bake card
+  with your next step and an optional screen wake-lock.
+
 ## 🧪 Tests
 
 The math engine, fermentation model, and share codec are pure ES modules

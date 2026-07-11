@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dough Canvas — your dough as a picture. Drag the layers.">
+    <title>Ⅱ Dough Canvas — THE LAB</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+    <div class="page wide">
+        <nav id="lab-nav"></nav>
+
+        <header>
+            <span class="smallcaps">experiment Ⅱ</span>
+            <h2>Dough Canvas</h2>
+            <p class="caption no-print">The jar is your formula. Drag a boundary to change a ratio; pull the surface ring to scale the batch; tap a layer to read about it.</p>
+        </header>
+
+        <div class="canvas-layout">
+            <svg id="jar" class="jar-svg" viewBox="0 0 410 600" aria-label="Dough composition jar"></svg>
+            <aside class="detail-panel" id="detail"></aside>
+        </div>
+    </div>
+
+    <script type="module" src="canvas.js"></script>
+</body>
+</html>

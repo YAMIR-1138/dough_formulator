@@ -34,6 +34,7 @@ const JAR = { left: 74, right: 294, top: 92, bottom: 556 };
 const RAIL = { x: 300, w: 88 };      // margin labels / proxy handles
 const GUTTER = { x: 66 };            // etched gram scale (right-aligned at x)
 const SHELF = { y: 590, h: 60 };     // boule shelf
+const CELLAR = { cx: 342, cy: 58 };  // salt cellar, in the margin above the rail
 const STAGE_PX = 180;
 
 const FLOUR_COLORS = {
@@ -62,6 +63,7 @@ const view = {
 
 let prevCapacity = null;
 let gesturing = false;
+let lastBands = null;
 
 /* ---------- layers ---------- */
 
@@ -106,7 +108,7 @@ const KINDS = {
         fromGrams: (r, grams) => ((grams + r.starterWater + r.liquidAddInWater) / r.flourTotal) * 100,
     },
     starter: {
-        range: [5, 50], step: 1, canonicals: [10, 15, 20, 25],
+        range: [1, 50], step: 0.5, canonicals: [5, 10, 15, 20, 25],
         perPx: 0.12,
         value: r => r.starterPct,
         edit: (s, v) => model.setStarterPercent(s, v),
@@ -139,11 +141,14 @@ function kindFor(layer) {
     return KINDS[layer.kind];
 }
 
-function applyEdit(layer, rawValue) {
+function applyEdit(layer, rawValue, live = false) {
     const k = kindFor(layer);
-    const v = magneticSnap(
-        Math.min(k.range[1], Math.max(k.range[0], rawValue)),
-        k.step, k.canonicals, k.step * 2.5);
+    const clamped = Math.min(k.range[1], Math.max(k.range[0], rawValue));
+    // Live drags glide at fine resolution (1/10 step, no magnets) so the
+    // band tracks the finger 1:1; the magnetic snap fires once, on release
+    const v = live
+        ? Number(clamped.toFixed(Math.max(0, 1 - Math.floor(Math.log10(k.step)))))
+        : magneticSnap(clamped, k.step, k.canonicals, k.step * 2.5);
     const before = k.value(model.derive(store.get().state));
     store.apply(s => k.edit(s, v));
     if (layer.kind === 'water') {
@@ -166,6 +171,7 @@ function computeBands(layers, recipe) {
     const scale = makeJarScale(recipe.doughWeight, {
         jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: gesturing,
     });
+    const rezoomed = prevCapacity !== null && scale.capacity !== prevCapacity && !gesturing;
     prevCapacity = scale.capacity;
     const bands = new Map();
     let cum = 0;
@@ -174,7 +180,7 @@ function computeBands(layers, recipe) {
         cum += layer.grams;
         bands.set(layer.id, { id: layer.id, y0, y1: scale.yOf(cum) });
     }
-    return { bands, scale, focus: false };
+    return { bands, scale, focus: false, rezoomed };
 }
 
 /** Bands with the focus tween applied (lerp between two layouts). */
@@ -199,7 +205,11 @@ function render(state) {
     const recipe = model.derive(state);
     const layers = buildLayers(recipe);
     const layout = computeBands(layers, recipe);
+    if (layout.rezoomed && lastBands && !view.lerp && !view.pour) {
+        view.lerp = { from: lastBands, start: performance.now(), ms: 260 };
+    }
     let bands = tweenedBands(layout.bands);
+    lastBands = new Map(bands);
 
     // Preset pour-in: reveal the stack bottom-up
     let pourClip = null;
@@ -322,11 +332,11 @@ function drawGutterScale(layout, layers, bands) {
     const g = el('g', { class: 'gutter' });
     if (!layout.focus && layout.scale) {
         const cap = layout.scale.capacity;
-        const step = cap > 3000 ? 500 : 250;
-        for (let grams = 0; grams <= cap; grams += step / 2) {
+        const { labelStep, minorStep } = layout.scale;
+        for (let grams = 0; grams <= cap; grams += minorStep) {
             const y = layout.scale.yOf(grams);
             if (y < JAR.top - 2) break;
-            const major = grams % step === 0;
+            const major = grams % labelStep === 0;
             g.appendChild(el('line', {
                 class: 'gutter-tick' + (major ? ' major' : ''),
                 x1: GUTTER.x - (major ? 12 : 6), x2: GUTTER.x, y1: y, y2: y,
@@ -415,8 +425,8 @@ function drawMarginProxies(thin, recipe) {
 }
 
 function drawCellar(recipe) {
-    // The salt cellar: docked above the rim, right side. Twist to season.
-    const cx = JAR.right - 18, cy = JAR.top - 48;
+    // The salt cellar lives in the margin - twist to season.
+    const cx = CELLAR.cx, cy = CELLAR.cy;
     const g = el('g', { class: 'cellar', 'data-act': 'cellar' });
     g.appendChild(el('circle', { class: 'cellar-hit', cx, cy, r: 30 }));
     const body = el('g', { transform: `rotate(${view.cellarSpin} ${cx} ${cy})` });
@@ -429,8 +439,9 @@ function drawCellar(recipe) {
         body.appendChild(el('circle', { class: 'cellar-hole', cx: cx + dx, cy: cy + dy, r: 1 }));
     }
     g.appendChild(body);
-    g.appendChild(el('text', { class: 'cellar-label', x: cx, y: cy + 30, 'text-anchor': 'middle' },
+    g.appendChild(el('text', { class: 'cellar-label', x: cx, y: cy + 32, 'text-anchor': 'middle' },
         `salt ${formatPct(recipe.saltPct)}%`));
+    g.appendChild(el('text', { class: 'cellar-label', x: cx, y: cy + 44, 'text-anchor': 'middle' }, 'twist me'));
     svg.appendChild(g);
 }
 
@@ -609,8 +620,16 @@ function drawDiffChip() {
     if (!diffChip) return;
     const g = el('g', { class: 'diff-chip' });
     const w = Math.max(diffChip.main.length, diffChip.sub.length) * 7.4 + 20;
-    const x = Math.min(390 - w - 4, Math.max(4, diffChip.x - w / 2));
-    const y = Math.max(30, diffChip.y - 58);
+    let x, y;
+    if (diffChip.touch) {
+        // A finger hides whatever it touches: pin the readout to whichever
+        // end of the jar the hand is NOT on
+        x = (JAR.left + JAR.right) / 2 - w / 2;
+        y = diffChip.y > 320 ? 16 : 596;
+    } else {
+        x = Math.min(390 - w - 4, Math.max(4, diffChip.x - w / 2));
+        y = Math.max(30, diffChip.y - 58);
+    }
     g.appendChild(el('rect', { x, y, width: w, height: 42, rx: 8 }));
     g.appendChild(el('text', { class: 'chip-main', x: x + 10, y: y + 18 }, diffChip.main));
     g.appendChild(el('text', { class: 'chip-sub', x: x + 10, y: y + 34 }, diffChip.sub));
@@ -630,30 +649,36 @@ svg.addEventListener('pointerdown', e => {
     const target = e.target.closest?.('[data-act]');
     if (!target) return;
     e.preventDefault();
-    svg.setPointerCapture(e.pointerId);
+    try { svg.setPointerCapture(e.pointerId); } catch { /* stale or synthetic pointer id */ }
     const { state } = store.get();
     const recipe = model.derive(state);
     const p = svgPoint(e);
     ptr = {
         act: target.getAttribute('data-act'),
+        touch: e.pointerType !== 'mouse',
         startState: state,
         start: p,
         last: p,
         moved: false,
         recipe0: recipe,
-        cellarLastAngle: Math.atan2(p.x - (JAR.right - 18), (JAR.top - 48) - p.y) * 180 / Math.PI,
+        cellarLastAngle: Math.atan2(p.x - CELLAR.cx, CELLAR.cy - p.y) * 180 / Math.PI,
         cellarAcc: 0,
     };
     gesturing = true;
 });
+
+let dragRaf = null;
 
 svg.addEventListener('pointermove', e => {
     if (!ptr) return;
     const p = svgPoint(e);
     if (!ptr.moved && Math.hypot(p.x - ptr.start.x, p.y - ptr.start.y) > 6) ptr.moved = true;
     ptr.last = p;
-    if (!ptr.moved) return;
-    routeDrag(p);
+    if (!ptr.moved || dragRaf) return;
+    dragRaf = requestAnimationFrame(() => {
+        dragRaf = null;
+        if (ptr) routeDrag(ptr.last);
+    });
 });
 
 function routeDrag(p) {
@@ -678,11 +703,12 @@ function routeDrag(p) {
             // tuned per kind so 20 g of salt is as controllable as water
             raw = k.value(r0) + (ptr.start.y - p.y) * k.perPx;
         }
-        const v = applyEdit(layer, raw);
+        const v = applyEdit(layer, raw, true);
+        ptr.pending = { layer, raw };
         const r2 = model.derive(store.get().state);
         const l2 = buildLayers(r2).find(l => l.id === arg);
         diffChip = {
-            x: p.x, y: p.y,
+            x: p.x, y: p.y, touch: ptr.touch,
             main: `${layer.label} ${round1(v)}%`,
             sub: `${displayGrams(l2.grams)} g (${l2.grams >= layer0.grams ? '+' : ''}${fmtInt(l2.grams - layer0.grams)} g)`,
         };
@@ -690,11 +716,12 @@ function routeDrag(p) {
     } else if (verb === 'surface') {
         const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
         const d0 = model.derive(ptr.startState).doughWeight;
-        const target = Math.round((d0 + (ptr.start.y - p.y) * scale.gramsPerPx) / 25) * 25;
+        const target = Math.round(d0 + (ptr.start.y - p.y) * scale.gramsPerPx);
+        ptr.pendingSurface = target;
         store.apply(s => model.scaleToDoughWeight(s, target));
         const r2 = model.derive(store.get().state);
         diffChip = {
-            x: p.x, y: p.y,
+            x: p.x, y: p.y, touch: ptr.touch,
             main: `${displayGrams(r2.doughWeight)} g of dough`,
             sub: `${displayGrams(r2.weightPerLoaf)} g per loaf`,
         };
@@ -707,11 +734,13 @@ function routeDrag(p) {
         const b = layout.bands.get(layer.id);
         const k = kindFor(layer);
         const frac = Math.min(1, Math.max(0, (b.y0 - p.y) / (b.y0 - b.y1)));
-        const v = applyEdit(layer, k.range[0] + frac * (k.range[1] - k.range[0]));
-        diffChip = { x: p.x, y: p.y, main: `${round1(v)}%`, sub: layer.label };
+        const raw = k.range[0] + frac * (k.range[1] - k.range[0]);
+        const v = applyEdit(layer, raw, true);
+        ptr.pending = { layer, raw };
+        diffChip = { x: p.x, y: p.y, touch: ptr.touch, main: `${round1(v)}%`, sub: layer.label };
         store.rerender();
     } else if (verb === 'cellar') {
-        const cx = JAR.right - 18, cy = JAR.top - 48;
+        const cx = CELLAR.cx, cy = CELLAR.cy;
         const ang = Math.atan2(p.x - cx, cy - p.y) * 180 / Math.PI;
         let d = ang - ptr.cellarLastAngle;
         while (d > 180) d -= 360;
@@ -730,7 +759,7 @@ function routeDrag(p) {
         }
         const r2 = model.derive(store.get().state);
         diffChip = {
-            x: p.x, y: p.y,
+            x: p.x, y: p.y, touch: ptr.touch,
             main: `salt ${formatPct(r2.saltPct)}%`,
             sub: `${displayGrams(r2.salt)} g · twist to season`,
         };
@@ -747,7 +776,7 @@ function spawnGrains() {
     const saltY = layout.bands.get('salt')?.y1 ?? JAR.bottom - 100;
     for (let i = 0; i < 5; i++) {
         view.grains.push({
-            x: JAR.right - 30 + Math.random() * 24, y0: JAR.top - 30,
+            x: JAR.right - 46 + Math.random() * 34, y0: JAR.top + 4,
             y1: saltY - 1, ms: 500 + Math.random() * 250,
             until: now + 500 + Math.random() * 250, seed: Math.random() * 9,
         });
@@ -756,13 +785,18 @@ function spawnGrains() {
 
 svg.addEventListener('pointerup', e => {
     if (!ptr) return;
-    if (svg.hasPointerCapture?.(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    try { if (svg.hasPointerCapture?.(e.pointerId)) svg.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     const session = ptr;
     ptr = null;
     gesturing = false;
     diffChip = null;
 
-    if (session.moved || Math.abs(session.cellarAcc) > 0.01 || session.act === 'cellar' && session.moved) {
+    if (session.moved || Math.abs(session.cellarAcc) > 0.01) {
+        // Settle: the magnetic snap fires once, on the final value
+        if (session.pending) applyEdit(session.pending.layer, session.pending.raw, false);
+        if (session.pendingSurface !== undefined) {
+            store.apply(s => model.scaleToDoughWeight(s, Math.round(session.pendingSurface / 25) * 25));
+        }
         commitGesture(session.startState);
         store.rerender();
         return;

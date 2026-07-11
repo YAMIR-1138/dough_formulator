@@ -147,25 +147,35 @@ export function niceCeil(g) {
     return Math.ceil(g / unit) * unit;
 }
 
+/** Friendly rounding quantum for a given dough weight. */
+export function jarQuantum(doughWeight) {
+    return doughWeight < 900 ? 50 : doughWeight < 2500 ? 100 : doughWeight < 6000 ? 250 : 500;
+}
+
 /**
- * Map grams ↔ jar pixels. jarTopY/jarBottomY define the interior in SVG
- * units. Capacity leaves headroom above the dough.
+ * Map grams ↔ jar pixels. The jar auto-zooms: capacity tracks the dough
+ * (~85% fill) whatever the batch size, so a 300 g bake fills the glass
+ * as proudly as an 1 800 g one. Hysteresis keeps the ruler stable across
+ * small edits; freeze pins it during a live gesture.
  */
 export function makeJarScale(doughWeight, { jarTopY = 60, jarBottomY = 560, prevCapacity = null, freeze = false } = {}) {
-    let capacity = niceCeil(Math.max(doughWeight * 1.3, 1200));
-    // Hysteresis: keep the previous capacity while the fill stays sane, so
-    // dragging doesn't rescale the ruler under the pointer. With freeze,
-    // the previous capacity holds unconditionally (used during a live drag).
+    const q = jarQuantum(doughWeight);
+    let capacity = Math.max(200, Math.ceil((doughWeight * 1.15) / q) * q);
     if (prevCapacity && freeze) {
         capacity = prevCapacity;
     } else if (prevCapacity) {
         const fill = doughWeight / prevCapacity;
-        if (fill <= 0.92 && fill >= 0.30) capacity = prevCapacity;
+        if (fill <= 0.93 && fill >= 0.70) capacity = prevCapacity;
     }
+    // Etched-scale steps: few enough labels to breathe, minors to read by
+    const labelStep = [50, 100, 250, 500, 1000, 2500].find(s => capacity / s <= 6) || 5000;
+    const minorStep = { 50: 25, 100: 25, 250: 50, 500: 100, 1000: 250, 2500: 500, 5000: 1000 }[labelStep];
     const heightPx = jarBottomY - jarTopY;
     const pxPerGram = heightPx / capacity;
     return {
         capacity,
+        labelStep,
+        minorStep,
         pxPerGram,
         gramsPerPx: capacity / heightPx,
         yOf: gramsFromBottom => jarBottomY - gramsFromBottom * pxPerGram,

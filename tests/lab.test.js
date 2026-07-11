@@ -79,11 +79,17 @@ test('Time scale: shading bands and day boundaries stay in order', () => {
     ok(days[0].date.getHours() === 0, 'boundary at midnight');
 });
 
-test('Jar scale: round-trip and capacity hysteresis', () => {
+test('Jar scale: auto-zoom fill, round-trip, hysteresis', () => {
+    // The jar zooms to the batch: fill stays 70-95% at any size
+    for (const dw of [300, 700, 1200, 1770, 5000]) {
+        const s = makeJarScale(dw);
+        const fill = dw / s.capacity;
+        ok(fill >= 0.70 && fill <= 0.95, `fill ${Math.round(fill * 100)}% at ${dw} g`);
+        ok(s.capacity / s.labelStep <= 6.01, `few scale labels at ${dw} g`);
+    }
     const s1 = makeJarScale(1770);
     close(s1.gramsAt(s1.yOf(1000)), 1000, 1e-6, 'px↔gram round-trip');
     close(s1.yOf(0), 560, 1e-9, 'zero at jar bottom');
-    ok(s1.capacity >= 1770 * 1.3, 'headroom above dough');
 
     // Small change keeps the ruler stable
     const s2 = makeJarScale(1900, { prevCapacity: s1.capacity });
@@ -92,7 +98,7 @@ test('Jar scale: round-trip and capacity hysteresis', () => {
     const s3 = makeJarScale(6000, { prevCapacity: s1.capacity });
     ok(s3.capacity > s1.capacity, 'rescales when overflowing');
     const s4 = makeJarScale(300, { prevCapacity: s1.capacity });
-    ok(s4.capacity < s1.capacity, 'rescales when nearly empty');
+    ok(s4.capacity < s1.capacity, 'zooms in when the batch shrinks');
 });
 
 test('niceCeil produces friendly numbers', () => {

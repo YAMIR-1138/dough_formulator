@@ -231,3 +231,55 @@ export function batchCaption(numLoaves, perLoafG) {
     if (numLoaves <= 3) return `${numberWord(numLoaves)} ${size} boules`;
     return 'a bakery morning';
 }
+
+/* ------------------------------------------------------------------ */
+/* Focus scale + hydration zones (Dough Canvas v3)                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Broken-scale layout: the focused band gets exactly stagePx of height;
+ * every other band shares the remaining space proportionally to grams.
+ * items: [{ id, grams }] bottom -> top. Returns bands [{ id, y0, y1 }]
+ * (y0 = bottom, y1 = top, SVG coords), plus the magnification factor of
+ * the focused band vs its honest height.
+ */
+export function makeFocusScale(items, focusedId, { jarTopY = 90, jarBottomY = 560, stagePx = 180, headroomPx = 50 } = {}) {
+    const total = items.reduce((s, i) => s + i.grams, 0);
+    const usable = jarBottomY - jarTopY - headroomPx;
+    const focused = items.find(i => i.id === focusedId);
+    const restGrams = total - (focused?.grams || 0);
+    const restPx = Math.max(0, usable - stagePx);
+    const bands = [];
+    let y = jarBottomY;
+    for (const item of items) {
+        const h = item.id === focusedId
+            ? stagePx
+            : (restGrams > 0 ? (item.grams / restGrams) * restPx : 0);
+        bands.push({ id: item.id, y0: y, y1: y - h });
+        y -= h;
+    }
+    const honestPx = focused && total > 0 ? (focused.grams / total) * usable : 0;
+    const magnification = honestPx > 0 ? stagePx / honestPx : Infinity;
+    return { bands, magnification, get: id => bands.find(b => b.id === id) };
+}
+
+/** Named hydration zones, for ruler etching and crossing flashes. */
+export function hydrationZone(h) {
+    if (h < 62) return 'bagel zone';
+    if (h < 68) return 'sandwich zone';
+    if (h < 78) return 'country zone';
+    if (h < 88) return 'ciabatta zone';
+    return 'batter zone';
+}
+
+/**
+ * Magnetic snap: normal step snapping, but canonical values capture the
+ * raw value from a wider radius so classic numbers take zero skill.
+ */
+export function magneticSnap(raw, step, canonicals = [], captureRadius = step * 3) {
+    for (const c of canonicals) {
+        if (Math.abs(raw - c) <= captureRadius) return c;
+    }
+    const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+    return Number((Math.round(raw / step) * step).toFixed(decimals));
+}

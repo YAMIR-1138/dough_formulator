@@ -1,539 +1,868 @@
 /**
- * canvas.js - Concept II: Dough Canvas, v2.
+ * canvas.js - Concept II: Dough Canvas v3, "The Living Broadsheet".
  *
- * The jar is the picture; the chip cards are the interface. Every
- * ingredient has a permanent, same-sized card (color swatch, name, grams,
- * percent) that expands into its editor when selected. The jar keeps the
- * gestures it is good at: dragging the big boundaries and the surface.
- * Small quantities (salt, thin flour shares) are never drag targets, so
- * they are never useless.
+ * The jar IS the interface. It self-annotates (in-band typeset labels,
+ * an etched gram scale on the glass, margin labels for thin bands that
+ * double as fat drag proxies), edits by direct touch (full-width edge
+ * strips with a diff chip at the finger, magnetic snapping onto classic
+ * values), magnifies honestly (tap a layer -> a broken-scale focus stage
+ * with fine drag and -/+ endcaps), and keeps a soul: a twistable salt
+ * cellar with falling grains, fermentation bubbles in the starter, a
+ * pour-in when presets load, and a boule shelf where your loaves sit.
+ *
+ * Architecture: pure state -> full SVG redraw. All pointer handling is
+ * delegated on the <svg> root (pointer capture on the root survives
+ * redraws), routed by data-act attributes. One transient rAF tween at a
+ * time (focus enter/exit, preset pour); ambient motion (bubbles) is CSS
+ * on decorative nodes only - never on band geometry.
  */
 import * as model from '../js/model.js';
 import { displayGrams, formatPct, round1 } from '../js/format.js';
 import { loadFromHash, createStore, renderSwitcher, el } from './lab-common.js';
-import { makeJarScale, caption, numberWord } from './lab-geometry.js';
+import {
+    makeJarScale, makeFocusScale, hydrationZone, magneticSnap,
+    caption, numberWord,
+} from './lab-geometry.js';
 import { PRESETS, getPreset } from '../js/presets.js';
 
 const $ = id => document.getElementById(id);
 renderSwitcher($('lab-nav'), 'canvas');
 
-const JAR = { left: 70, right: 250, top: 50, bottom: 550 };
-const svg = $('jar');
+/* ---------- geometry constants ---------- */
 
-const boot = loadFromHash();
-const store = createStore({ state: boot.state, env: boot.env, onRender: render });
-
-let prevCapacity = null;
-let selected = 'water';
-let dragging = false;
+const JAR = { left: 74, right: 294, top: 92, bottom: 556 };
+const RAIL = { x: 300, w: 88 };      // margin labels / proxy handles
+const GUTTER = { x: 66 };            // etched gram scale (right-aligned at x)
+const SHELF = { y: 590, h: 60 };     // boule shelf
+const STAGE_PX = 180;
 
 const FLOUR_COLORS = {
     bread: 'var(--flour-bread)', allPurpose: 'var(--flour-ap)',
     wholeWheat: 'var(--flour-ww)', rye: 'var(--flour-rye)',
     spelt: 'var(--flour-spelt)', semolina: 'var(--flour-semolina)',
 };
+const CREAM_TEXT = new Set(['water', 'wholeWheat', 'rye']);
 
-/* ---------- layer model ---------- */
+/* ---------- state ---------- */
+
+const boot = loadFromHash();
+const store = createStore({ state: boot.state, env: boot.env, onRender: render });
+const svg = $('jar');
+
+const view = {
+    focused: null,          // layer id in focus-stage mode
+    undo: [],               // snapshots of state, one per committed gesture
+    undoUntil: 0,           // timestamp: show undo pill until then
+    lerp: null,             // { from: Map(id->{y0,y1}), start, ms } focus tween
+    pour: null,             // { start, ms, ghosts } preset pour-in
+    zoneFlash: null,        // { name, until }
+    cellarSpin: 0,          // accumulated visual rotation of the salt cellar
+    grains: [],             // transient falling salt grains
+};
+
+let prevCapacity = null;
+let gesturing = false;
+
+/* ---------- layers ---------- */
 
 function buildLayers(recipe) {
     const layers = [
-        { id: 'water', label: 'Water', grams: recipe.waterToAdd, color: 'var(--water)', kind: 'water' },
-        { id: 'starter', label: 'Starter', grams: recipe.starterMass, color: 'var(--starter)', kind: 'starter' },
-        { id: 'salt', label: 'Salt', grams: recipe.salt, color: 'var(--salt)', kind: 'salt' },
+        { id: 'water', label: 'Water', grams: recipe.waterToAdd, color: 'var(--water)', kind: 'water', textKey: 'water' },
+        { id: 'starter', label: 'Starter', grams: recipe.starterMass, color: 'var(--starter)', kind: 'starter', textKey: 'starter' },
+        { id: 'salt', label: 'Salt', grams: recipe.salt, color: 'var(--salt)', kind: 'salt', textKey: 'salt' },
     ];
     recipe.flourBreakdown.forEach((f, i) => {
         layers.push({
             id: `flour-${i}`, label: model.FLOUR_TYPES[f.key]?.label || f.key,
             grams: f.added, color: FLOUR_COLORS[f.key] || 'var(--flour-bread)',
-            kind: 'flour', flourIndex: i, flourKey: f.key,
+            kind: 'flour', flourIndex: i, flourKey: f.key, textKey: f.key,
         });
-    });
-    recipe.addIns.forEach((a, i) => {
-        if (!a.liquid && a.grams > 0) {
-            layers.push({ id: `addin-${i}`, label: a.name || 'Add-in', grams: a.grams, color: 'var(--good)', kind: 'addin' });
-        }
     });
     return layers;
 }
 
-/* ---------- jar SVG (persistent structure) ---------- */
-
-let structureSig = '';
-let nodes = null;
-
-function rebuildStructure(layers) {
-    svg.innerHTML = '';
-    nodes = { bands: new Map(), boundaries: new Map(), tabs: new Map() };
-
-    const w = JAR.right - JAR.left;
-    svg.appendChild(el('path', {
-        class: 'jar-glass',
-        d: `M ${JAR.left - 8} ${JAR.top - 22} h ${w + 16} v 10 l -8 10 V ${JAR.bottom + 6}
-            q 0 8 -8 8 H ${JAR.left + 8} q -8 0 -8 -8 V ${JAR.top - 2} l -8 -10 z`,
-    }));
-
-    const bandGroup = el('g');
-    const boundaryGroup = el('g');
-    svg.append(bandGroup, boundaryGroup);
-
-    for (const layer of layers) {
-        const rect = el('rect', {
-            class: 'band', 'data-id': layer.id,
-            x: JAR.left, width: w, rx: 2, fill: layer.color,
-        });
-        rect.addEventListener('click', () => selectLayer(layer.id));
-        bandGroup.appendChild(rect);
-        nodes.bands.set(layer.id, rect);
-
-        if (['water', 'starter', 'flour'].includes(layer.kind)) {
-            const isTopFlour = layer.kind === 'flour' && layer.flourIndex === layers.filter(l => l.kind === 'flour').length - 1;
-            if (!isTopFlour) {
-                const tab = el('g', { class: 'handle-tab', 'data-tab': layer.id },
-                    el('rect', { class: 'tab-body', x: JAR.left - 44, y: -16, width: 34, height: 32, rx: 7 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: -5, y2: -5 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: 0, y2: 0 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: 5, y2: 5 }),
-                    el('rect', { x: JAR.left - 52, y: -26, width: 52, height: 52, fill: 'transparent' }));
-                const g = el('g', { 'data-boundary': layer.id },
-                    el('line', { class: 'boundary-line', x1: JAR.left, x2: JAR.right }),
-                    el('rect', { class: 'grab', x: JAR.left, width: w, height: 36 }));
-                attachDrag(g.querySelector('.grab'), layer.id);
-                attachDrag(tab, layer.id);
-                boundaryGroup.append(g, tab);
-                nodes.boundaries.set(layer.id, g);
-                nodes.tabs.set(layer.id, tab);
-            }
-        }
-    }
-
-    nodes.ruler = el('g', { class: 'ruler' });
-    svg.appendChild(nodes.ruler);
-
-    nodes.surface = el('g', { class: 'surface-handle handle-tab' },
-        el('line', { x1: JAR.left - 6, x2: JAR.right + 6, y1: 0, y2: 0 }),
-        el('circle', { cx: JAR.right + 20, cy: 0, r: 13 }),
-        el('line', { class: 'tab-grip', x1: JAR.right + 14, x2: JAR.right + 26, y1: -4, y2: -4 }),
-        el('line', { class: 'tab-grip', x1: JAR.right + 14, x2: JAR.right + 26, y1: 4, y2: 4 }),
-        el('rect', { x: JAR.right, y: -26, width: 52, height: 52, fill: 'transparent' }));
-    attachDrag(nodes.surface, '__surface__');
-    svg.appendChild(nodes.surface);
-}
-
-/* ---------- drag handling ---------- */
-
-function svgY(clientY) {
-    const r = svg.getBoundingClientRect();
-    return (clientY - r.top) * (600 / r.height);
-}
-
-let activeRuler = null;
-
-function attachDrag(target, boundaryId) {
-    let raf = null;
-    let startY = 0;
-    let moved = false;
-    target.addEventListener('pointerdown', e => {
-        e.preventDefault();
-        target.setPointerCapture(e.pointerId);
-        dragging = true;
-        startY = e.clientY;
-        moved = false;
-    });
-    target.addEventListener('pointermove', e => {
-        if (!dragging || !target.hasPointerCapture(e.pointerId)) return;
-        if (Math.abs(e.clientY - startY) > 4) moved = true;
-        if (!moved || raf) return;
-        raf = requestAnimationFrame(() => {
-            raf = null;
-            if (!activeRuler) startRuler(boundaryId, target);
-            handleDrag(boundaryId, svgY(e.clientY));
-        });
-    });
-    const end = e => {
-        if (target.hasPointerCapture?.(e.pointerId)) target.releasePointerCapture(e.pointerId);
-        dragging = false;
-        activeRuler = null;
-        nodes.ruler.innerHTML = '';
-        target.classList?.remove('active');
-        hud('');
-        if (!moved && e.type === 'pointerup') selectBandAt(svgY(e.clientY));
-        store.rerender();
-    };
-    target.addEventListener('pointerup', end);
-    target.addEventListener('pointercancel', end);
-}
-
-function selectBandAt(y) {
-    const { state } = store.get();
-    const recipe = model.derive(state);
-    const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
-
-    let cum = 0;
-    const ranges = layers.map(layer => {
-        const y0 = scale.yOf(cum);
-        cum += layer.grams;
-        const y1 = scale.yOf(cum);
-        return { layer, top: y1, bottom: y0, height: y0 - y1 };
-    });
-
-    // Thin bands win when the tap lands close to them
-    let best = null;
-    for (const range of ranges) {
-        if (range.height < 20) {
-            const dist = Math.abs(y - (range.top + range.bottom) / 2);
-            if (dist < 9 && (!best || dist < best.dist)) best = { layer: range.layer, dist };
-        }
-    }
-    if (best) { selectLayer(best.layer.id); return; }
-    for (const range of ranges) {
-        if (y >= range.top && y <= range.bottom) { selectLayer(range.layer.id); return; }
-    }
-}
-
-function selectLayer(id) {
-    selected = id;
-    store.rerender();
-    chipRefs.get(id)?.card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-
-/* ---------- drag HUD + guide ruler ---------- */
-
-const hudEl = $('hud');
-
-function hud(text) {
-    hudEl.textContent = text;
-    hudEl.classList.toggle('on', !!text);
-}
-
-function startRuler(boundaryId, target) {
-    target.classList?.add('active');
-    const { state } = store.get();
-    const recipe = model.derive(state);
-    const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
-    const ticks = [];
-
-    if (boundaryId === '__surface__') {
-        const step = scale.capacity > 3000 ? 500 : 250;
-        for (let g = step; g <= scale.capacity; g += step) {
-            ticks.push({ y: scale.yOf(g), label: `${g} g` });
-        }
-    } else {
-        const idx = layers.findIndex(l => l.id === boundaryId);
-        const below = layers.slice(0, idx).reduce((sum, l) => sum + l.grams, 0);
-        const layer = layers[idx];
-        if (layer.kind === 'water') {
-            for (let h = 55; h <= 100; h += 5) {
-                const grams = recipe.flourTotal * h / 100 - recipe.starterWater - recipe.liquidAddInWater;
-                if (grams >= 0) ticks.push({ y: scale.yOf(below + grams), label: `${h}%` });
-            }
-        } else if (layer.kind === 'starter') {
-            for (let p = 5; p <= 45; p += 5) {
-                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%` });
-            }
-        } else if (layer.kind === 'flour') {
-            for (let p = 10; p <= 90; p += 10) {
-                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%` });
-            }
-        }
-    }
-
-    activeRuler = ticks.filter(t => t.y >= JAR.top && t.y <= JAR.bottom);
-    nodes.ruler.innerHTML = '';
-    for (const tick of activeRuler) {
-        tick.line = el('line', { x1: JAR.left, x2: JAR.right, y1: tick.y, y2: tick.y });
-        tick.text = el('text', { x: JAR.left + 6, y: tick.y - 4 }, tick.label);
-        nodes.ruler.append(tick.line, tick.text);
-    }
-}
-
-function updateRulerHot(y) {
-    if (!activeRuler) return;
-    let best = null;
-    for (const tick of activeRuler) {
-        if (!best || Math.abs(tick.y - y) < Math.abs(best.y - y)) best = tick;
-    }
-    for (const tick of activeRuler) {
-        const hot = tick === best && Math.abs(tick.y - y) < 14;
-        tick.line.classList.toggle('hot', hot);
-        tick.text.classList.toggle('hot', hot);
-    }
-}
-
-function handleDrag(boundaryId, y) {
-    const { state } = store.get();
-    const recipe = model.derive(state);
-    const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
-    prevCapacity = scale.capacity;
-
-    const gramsAtY = Math.max(0, scale.gramsAt(Math.min(JAR.bottom, Math.max(JAR.top, y))));
-    updateRulerHot(y);
-
-    if (boundaryId === '__surface__') {
-        const snapped = Math.round(gramsAtY / 25) * 25;
-        store.apply(s => model.scaleToDoughWeight(s, snapped));
-        const r2 = model.derive(store.get().state);
-        hud(`${displayGrams(r2.doughWeight)} g of dough · ${displayGrams(r2.weightPerLoaf)} g per loaf`);
-        return;
-    }
-
-    const idx = layers.findIndex(l => l.id === boundaryId);
-    const below = layers.slice(0, idx).reduce((sum, l) => sum + l.grams, 0);
-    const newGrams = Math.max(0, gramsAtY - below);
-    const layer = layers[idx];
-
-    if (layer.kind === 'water') {
-        const hyd = ((newGrams + recipe.starterWater + recipe.liquidAddInWater) / recipe.flourTotal) * 100;
-        store.apply(s => model.setHydration(s, Math.round(hyd * 2) / 2));
-        const r2 = model.derive(store.get().state);
-        hud(`${formatPct(r2.hydration)}% hydration · ${displayGrams(r2.waterToAdd)} g water`);
-    } else if (layer.kind === 'starter') {
-        const snapped = Math.round(newGrams / 5) * 5;
-        store.apply(s => model.setStarterGrams(s, snapped));
-        const r2 = model.derive(store.get().state);
-        hud(`${displayGrams(r2.starterMass)} g starter · ${formatPct(r2.starterPct)}% of flour`);
-    } else if (layer.kind === 'flour') {
-        const i = layer.flourIndex;
-        const flours = state.flours.map(f => ({ ...f }));
-        if (i + 1 >= flours.length) return;
-        const pairPct = flours[i].pct + flours[i + 1].pct;
-        const newPct = Math.min(pairPct - 2, Math.max(2, Math.round((newGrams / recipe.flourTotal) * 100)));
-        flours[i].pct = newPct;
-        flours[i + 1].pct = pairPct - newPct;
-        store.apply(s => model.setFlourBlend(s, flours));
-        hud(`${formatPct(newPct)}% ${layer.label.toLowerCase()} · ${formatPct(pairPct - newPct)}% ${layers[idx + 1].label.toLowerCase()}`);
-    }
-}
-
-/* ---------- ingredient chips (the real interface) ---------- */
-
-const chipRefs = new Map();   // layer id -> { card, grams, pct, update }
-let chipsSig = '';
-
-/** Slider row with -/+ steppers; safe against re-render while touched. */
-function mkSliderRow({ label, min, max, step, unit, get, apply }) {
-    const readout = el('span', { class: 'numeral chip-readout' }, '');
-    const slider = el('input', { type: 'range', min, max, step, value: get() });
-    let busy = false;
-    const setVal = v => {
-        const clamped = Math.min(max, Math.max(min, v));
-        slider.value = String(clamped);
-        readout.textContent = `${round1(clamped)}${unit}`;
-        store.apply(s => apply(s, clamped));
-    };
-    slider.addEventListener('input', () => setVal(Number(slider.value)));
-    slider.addEventListener('pointerdown', () => { busy = true; });
-    for (const evt of ['pointerup', 'pointercancel', 'change', 'blur']) {
-        slider.addEventListener(evt, () => { busy = false; store.rerender(); });
-    }
-    const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
-    const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
-    minus.addEventListener('click', e => { e.stopPropagation(); setVal(Number(slider.value) - step); });
-    plus.addEventListener('click', e => { e.stopPropagation(); setVal(Number(slider.value) + step); });
-    const row = el('div', {},
-        label ? el('span', { class: 'smallcaps chip-row-label' }, label) : null,
-        el('div', { class: 'popover-row' }, minus, slider, plus, readout));
-    return {
-        row,
-        update() {
-            if (!busy && document.activeElement !== slider) slider.value = String(get());
-            readout.textContent = `${round1(Number(slider.value))}${unit}`;
-        },
-    };
-}
-
-function buildChip(layer, state) {
-    const card = el('div', { class: 'chip-card', 'data-chip': layer.id });
-    card.style.setProperty('--chip-color', layer.color);
-
-    const grams = el('span', { class: 'numeral chip-grams' }, '');
-    const pct = el('span', { class: 'chip-pct caption' }, '');
-    const head = el('div', { class: 'chip-head' },
-        el('span', { class: 'chip-name' }, layer.label), grams, pct);
-    head.addEventListener('click', () => selectLayer(layer.id));
-    card.appendChild(head);
-
-    const editor = el('div', { class: 'chip-editor' });
-    card.appendChild(editor);
-    const note = el('p', { class: 'caption chip-note' }, '');
-    const parts = [];   // things to update in place
-
-    if (layer.kind === 'water') {
-        const row = mkSliderRow({
-            min: 40, max: 120, step: 0.5, unit: '%',
-            get: () => store.get().state.hydration,
-            apply: (s, v) => model.setHydration(s, v),
-        });
-        editor.appendChild(row.row);
-        parts.push(row);
-        parts.push({ update: r => { note.textContent = caption('hydration', r.hydration); } });
-    } else if (layer.kind === 'starter') {
-        const pctRow = mkSliderRow({
-            label: 'amount, % of flour', min: 5, max: 50, step: 1, unit: '%',
-            get: () => store.get().state.starter.pct,
-            apply: (s, v) => model.setStarterPercent(s, v),
-        });
-        const hydRow = mkSliderRow({
-            label: 'starter hydration', min: 50, max: 150, step: 5, unit: '%',
-            get: () => store.get().state.starter.hydration,
-            apply: (s, v) => model.setStarterHydration(s, v),
-        });
-        const styleChips = el('div', { class: 'popover-chips' });
-        for (const [val, label] of [[100, 'liquid'], [60, 'stiff']]) {
-            const chip = el('button', { class: 'chip', type: 'button', 'data-hyd': val }, label);
-            chip.addEventListener('click', e => {
-                e.stopPropagation();
-                store.apply(s => model.setStarterHydration(s, val));
-            });
-            styleChips.appendChild(chip);
-        }
-        editor.append(pctRow.row, styleChips, hydRow.row);
-        parts.push(pctRow, hydRow);
-        parts.push({ update: r => {
-            for (const chip of styleChips.children) {
-                chip.classList.toggle('active',
-                    (r.starterHydration >= 90) === (chip.dataset.hyd === '100'));
-            }
-            note.textContent = `${caption('starter', r.starterPct)}. Carries ${displayGrams(r.starterFlour)} g flour + ${displayGrams(r.starterWater)} g water.`;
-        } });
-    } else if (layer.kind === 'salt') {
-        const row = mkSliderRow({
-            min: 0, max: 3.5, step: 0.1, unit: '%',
-            get: () => store.get().state.saltPct,
-            apply: (s, v) => model.setSalt(s, v),
-        });
-        editor.appendChild(row.row);
-        parts.push(row);
-        parts.push({ update: r => {
-            const c = caption('salt', r.saltPct);
-            note.textContent = `${c[0].toUpperCase()}${c.slice(1)}. Percent of total flour, starter included.`;
-        } });
-    } else if (layer.kind === 'flour') {
-        const i = layer.flourIndex;
-        const row = mkSliderRow({
-            label: 'share of the flour', min: 2, max: 100, step: 1, unit: '%',
-            get: () => store.get().state.flours[i]?.pct ?? 0,
-            apply: (s, v) => {
-                const flours = s.flours.map((f, fi) => ({ key: f.key, pct: fi === i ? v : f.pct }));
-                return model.setFlourBlend(s, flours);
-            },
-        });
-        const typeSelect = el('select', { 'aria-label': 'Flour type' });
-        for (const [key, def] of Object.entries(model.FLOUR_TYPES)) {
-            typeSelect.appendChild(el('option', { value: key }, def.label));
-        }
-        typeSelect.value = layer.flourKey;
-        typeSelect.addEventListener('click', e => e.stopPropagation());
-        typeSelect.addEventListener('change', () => {
-            store.apply(s => model.setFlourBlend(s,
-                s.flours.map((f, fi) => ({ key: fi === i ? typeSelect.value : f.key, pct: f.pct }))));
-        });
-        const removeBtn = el('button', { class: 'chip danger-chip', type: 'button' }, 'remove');
-        removeBtn.addEventListener('click', e => {
-            e.stopPropagation();
-            selected = 'water';
-            store.apply(s => model.setFlourBlend(s, s.flours.filter((_, fi) => fi !== i)));
-        });
-        editor.append(row.row, el('div', { class: 'chip-tools' }, typeSelect, removeBtn));
-        parts.push(row);
-        parts.push({ update: (r, s) => {
-            removeBtn.disabled = s.flours.length <= 1;
-            note.textContent = model.FLOUR_TYPES[s.flours[i]?.key]?.wholeGrain
-                ? 'A whole grain: drinks more water, ferments faster.'
-                : 'A white flour: structure, lift, open crumb.';
-        } });
-    }
-
-    editor.appendChild(note);
-
-    return {
-        card,
-        update(recipe, state2, layer2) {
-            grams.textContent = `${displayGrams(layer2.grams)} g`;
-            pct.textContent = chipPct(layer2, recipe);
-            for (const part of parts) part.update(recipe, state2);
-        },
-    };
-}
-
-function chipPct(layer, recipe) {
+function valueLine(layer, recipe) {
     switch (layer.kind) {
-        case 'water': return `${formatPct(recipe.hydration)}% hydration`;
-        case 'starter': return `${formatPct(recipe.starterPct)}% of flour`;
-        case 'salt': return `${formatPct(recipe.saltPct)}%`;
-        case 'flour': return `${formatPct(recipe.flourBreakdown[layer.flourIndex]?.pct ?? 0)}% of flour`;
+        case 'water': return `${displayGrams(recipe.waterToAdd)} g · ${formatPct(recipe.hydration)}%`;
+        case 'starter': return `${displayGrams(recipe.starterMass)} g · ${formatPct(recipe.starterPct)}%`;
+        case 'salt': return `${displayGrams(recipe.salt)} g · ${formatPct(recipe.saltPct)}%`;
+        case 'flour': return `${displayGrams(layer.grams)} g · ${formatPct(recipe.flourBreakdown[layer.flourIndex].pct)}%`;
         default: return '';
     }
 }
 
-function renderChips(recipe, state) {
-    const layers = buildLayers(recipe);
-    // Chips read top of jar first: reverse so water sits last, like the pour
-    const ordered = [...layers].reverse();
-    const sig = ordered.map(l => `${l.id}:${l.kind === 'flour' ? l.flourKey : ''}`).join('|');
+/* ---------- editing vocabulary (one place, every gesture routes here) ----------
+   Each kind: full-value range for the focus stage, snapping step, magnetic
+   canonicals, and the setter. Boundary drags, proxy drags, stage drags and
+   endcaps all call the same edit(). */
 
-    if (sig !== chipsSig) {
-        chipsSig = sig;
-        chipRefs.clear();
-        const container = $('chips');
-        container.innerHTML = '';
-        for (const layer of ordered) {
-            const chip = buildChip(layer, state);
-            chipRefs.set(layer.id, chip);
-            container.appendChild(chip.card);
-        }
-        const addBtn = el('button', { class: 'chip add-flour', type: 'button' }, '+ add a flour');
-        addBtn.addEventListener('click', () => {
-            const used = new Set(store.get().state.flours.map(f => f.key));
-            const nextKey = Object.keys(model.FLOUR_TYPES).find(k => !used.has(k)) || 'bread';
-            store.apply(s => model.setFlourBlend(s, [
-                ...s.flours.map(f => ({ key: f.key, pct: f.pct * 0.9 })),
-                { key: nextKey, pct: 10 },
-            ]));
-        });
-        container.appendChild(addBtn);
-    }
+const KINDS = {
+    water: {
+        range: [45, 110], step: 0.5, canonicals: [65, 70, 75, 80, 85],
+        perPx: 0.12,     // value units per px on a proxy drag (fine lane)
+        value: r => r.hydration,
+        edit: (s, v) => model.setHydration(s, v),
+        unit: '% hydration',
+        fromGrams: (r, grams) => ((grams + r.starterWater + r.liquidAddInWater) / r.flourTotal) * 100,
+    },
+    starter: {
+        range: [5, 50], step: 1, canonicals: [10, 15, 20, 25],
+        perPx: 0.12,
+        value: r => r.starterPct,
+        edit: (s, v) => model.setStarterPercent(s, v),
+        unit: '% of flour',
+        fromGrams: (r, grams) => (grams / r.flourTotal) * 100,
+    },
+    salt: {
+        range: [0, 3.5], step: 0.1, canonicals: [1.8, 2, 2.2],
+        perPx: 0.012,    // 100 px of thumb = ~1% salt: precision by construction
+        value: r => r.saltPct,
+        edit: (s, v) => model.setSalt(s, v),
+        unit: '% of flour',
+        fromGrams: (r, grams) => (grams / r.flourTotal) * 100,
+    },
+};
 
-    for (const layer of ordered) {
-        const chip = chipRefs.get(layer.id);
-        chip.card.classList.toggle('selected', selected === layer.id);
-        chip.update(recipe, state, layer);
-    }
-}
-
-/* ---------- batch bar ---------- */
-
-let batchRefs = null;
-
-function renderBatch(recipe, state) {
-    if (!batchRefs) {
-        const bar = $('batch-bar');
-        const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
-        const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
-        minus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves - 1)));
-        plus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves + 1)));
-        batchRefs = {
-            weight: el('span', { class: 'numeral batch-weight' }, ''),
-            loaves: el('span', {}, ''),
-            perLoaf: el('span', { class: 'caption' }, ''),
-            stats: el('span', { class: 'caption batch-stats' }, ''),
+function kindFor(layer) {
+    if (layer.kind === 'flour') {
+        const i = layer.flourIndex;
+        return {
+            range: [2, 100], step: 1, canonicals: [10, 20, 25, 50],
+            perPx: 0.2,
+            value: r => r.flourBreakdown[i]?.pct ?? 0,
+            edit: (s, v) => model.setFlourBlend(s,
+                s.flours.map((f, fi) => ({ key: f.key, pct: fi === i ? v : f.pct }))),
+            unit: '% of flour blend',
+            fromGrams: (r, grams) => (grams / r.flourTotal) * 100,
         };
-        bar.append(
-            batchRefs.weight, el('span', { class: 'caption' }, 'of dough'),
-            el('span', { class: 'batch-sep' }, '·'),
-            minus, batchRefs.loaves, plus,
-            batchRefs.perLoaf,
-            batchRefs.stats);
     }
-    batchRefs.weight.textContent = `${displayGrams(recipe.doughWeight)} g`;
-    batchRefs.loaves.textContent = `${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`;
-    batchRefs.perLoaf.textContent = `${displayGrams(recipe.weightPerLoaf)} g each, ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked`;
-    batchRefs.stats.textContent = `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented`;
+    return KINDS[layer.kind];
 }
 
-/* ---------- presets ---------- */
+function applyEdit(layer, rawValue) {
+    const k = kindFor(layer);
+    const v = magneticSnap(
+        Math.min(k.range[1], Math.max(k.range[0], rawValue)),
+        k.step, k.canonicals, k.step * 2.5);
+    const before = k.value(model.derive(store.get().state));
+    store.apply(s => k.edit(s, v));
+    if (layer.kind === 'water') {
+        const after = model.derive(store.get().state).hydration;
+        const za = hydrationZone(before), zb = hydrationZone(after);
+        if (za !== zb) view.zoneFlash = { name: zb, until: performance.now() + 1100 };
+    }
+    return v;
+}
+
+/* ---------- scales (honest jar vs focus stage) ---------- */
+
+function computeBands(layers, recipe) {
+    if (view.focused && layers.some(l => l.id === view.focused)) {
+        const fs = makeFocusScale(
+            layers.map(l => ({ id: l.id, grams: l.grams })), view.focused,
+            { jarTopY: JAR.top, jarBottomY: JAR.bottom, stagePx: STAGE_PX, headroomPx: 60 });
+        return { bands: new Map(fs.bands.map(b => [b.id, b])), magnification: fs.magnification, focus: true };
+    }
+    const scale = makeJarScale(recipe.doughWeight, {
+        jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: gesturing,
+    });
+    prevCapacity = scale.capacity;
+    const bands = new Map();
+    let cum = 0;
+    for (const layer of layers) {
+        const y0 = scale.yOf(cum);
+        cum += layer.grams;
+        bands.set(layer.id, { id: layer.id, y0, y1: scale.yOf(cum) });
+    }
+    return { bands, scale, focus: false };
+}
+
+/** Bands with the focus tween applied (lerp between two layouts). */
+function tweenedBands(target) {
+    if (!view.lerp) return target;
+    const t = Math.min(1, (performance.now() - view.lerp.start) / view.lerp.ms);
+    const e = 1 - Math.pow(1 - t, 3);   // easeOutCubic
+    const out = new Map();
+    for (const [id, b] of target) {
+        const from = view.lerp.from.get(id) || b;
+        out.set(id, { id, y0: from.y0 + (b.y0 - from.y0) * e, y1: from.y1 + (b.y1 - from.y1) * e });
+    }
+    if (t >= 1) view.lerp = null; else requestAnimationFrame(() => store.rerender());
+    return out;
+}
+
+/* ---------- render ---------- */
+
+const fmtInt = n => String(Math.round(n));
+
+function render(state) {
+    const recipe = model.derive(state);
+    const layers = buildLayers(recipe);
+    const layout = computeBands(layers, recipe);
+    let bands = tweenedBands(layout.bands);
+
+    // Preset pour-in: reveal the stack bottom-up
+    let pourClip = null;
+    if (view.pour) {
+        const t = Math.min(1, (performance.now() - view.pour.start) / view.pour.ms);
+        const e = 1 - Math.pow(1 - t, 2);
+        const topY = bands.get(layers[layers.length - 1].id).y1;
+        pourClip = JAR.bottom - (JAR.bottom - topY + 8) * e;
+        if (t >= 1) view.pour.done = true; else requestAnimationFrame(() => store.rerender());
+    }
+
+    svg.innerHTML = '';
+    const now = performance.now();
+
+    drawGutterScale(layout, layers, bands);
+    drawGlass();
+
+    // Bands (clipped by pour reveal when animating)
+    const bandGroup = el('g', pourClip !== null ? { 'clip-path': 'url(#pourclip)' } : {});
+    if (pourClip !== null) {
+        svg.appendChild(el('defs', {},
+            el('clipPath', { id: 'pourclip' },
+                el('rect', { x: JAR.left - 4, y: pourClip, width: JAR.right - JAR.left + 8, height: JAR.bottom - pourClip + 6 }))));
+    }
+    svg.appendChild(bandGroup);
+
+    const thin = [];
+    for (const layer of layers) {
+        const b = bands.get(layer.id);
+        let { y0, y1 } = b;
+        const floored = layer.kind === 'salt' && (y0 - y1) < 3 && !layout.focus;
+        if (floored) y1 = y0 - 3;
+        const h = y0 - y1;
+        const isStage = layout.focus && view.focused === layer.id;
+        const dimmed = layout.focus && !isStage;
+
+        bandGroup.appendChild(el('rect', {
+            class: 'band' + (dimmed ? ' dimmed' : ''), 'data-act': `band:${layer.id}`,
+            x: JAR.left, y: y1, width: JAR.right - JAR.left, height: Math.max(0, h),
+            fill: layer.color, rx: 1.5,
+        }));
+
+        // Meniscus curve on liquid tops
+        if ((layer.kind === 'water' || layer.kind === 'starter') && h > 8 && !isStage) {
+            bandGroup.appendChild(el('path', {
+                class: 'meniscus',
+                d: `M ${JAR.left} ${y1} Q ${(JAR.left + JAR.right) / 2} ${y1 + 3.5} ${JAR.right} ${y1}`,
+            }));
+        }
+
+        // Dotted top edge = drawn at paint floor, not to scale
+        if (floored) {
+            bandGroup.appendChild(el('line', {
+                class: 'floor-edge', x1: JAR.left, x2: JAR.right, y1: y1, y2: y1,
+            }));
+        }
+
+        // Fermentation bubbles: the starter is alive
+        if (layer.kind === 'starter' && h > 16 && !dimmed) {
+            const count = Math.max(2, Math.min(9, Math.round(recipe.starterPct / 4)));
+            for (let i = 0; i < count; i++) {
+                const bx = JAR.left + 14 + ((i * 83) % (JAR.right - JAR.left - 28));
+                const by = y0 - 4 - ((i * 37) % Math.max(6, h - 10));
+                bandGroup.appendChild(el('circle', {
+                    class: 'bubble', cx: bx, cy: by, r: 1.4 + (i % 3) * 0.7,
+                    style: `animation-delay:${(i * 0.6) % 3}s; animation-duration:${2.8 + (i % 4) * 0.7}s`,
+                }));
+            }
+        }
+
+        // In-band label when the band can carry type; margin label otherwise
+        if (!layout.focus && h >= 24) {
+            const cream = CREAM_TEXT.has(layer.textKey);
+            const midY = (y0 + y1) / 2 + 4;
+            bandGroup.appendChild(el('text', {
+                class: 'inband-name' + (cream ? ' cream' : ''), x: JAR.left + 12, y: midY,
+            }, layer.label));
+            bandGroup.appendChild(el('text', {
+                class: 'inband-value' + (cream ? ' cream' : ''), x: JAR.right - 12, y: midY,
+                'text-anchor': 'end',
+            }, valueLine(layer, recipe)));
+        } else if (!layout.focus) {
+            thin.push({ layer, mid: (y0 + y1) / 2 });
+        }
+
+        if (isStage) drawStage(layer, b, recipe, state, layout.magnification);
+    }
+
+    if (!layout.focus) {
+        drawBoundaries(layers, bands, recipe);
+        drawSurface(layers, bands, recipe, state);
+        drawMarginProxies(thin, recipe);
+        drawCellar(recipe);
+    } else {
+        // Focus mode: tap anywhere outside the stage to close
+        svg.insertBefore(el('rect', {
+            'data-act': 'close-stage', x: 0, y: 0, width: 390, height: 660, fill: 'transparent',
+        }), svg.firstChild);
+    }
+
+    drawHeadspace(layers, bands, recipe, state, now);
+    drawGhosts(now);
+    drawShelf(recipe, state);
+    drawGrains(now);
+    drawDiffChip();
+}
+
+/* ---------- pieces ---------- */
+
+function drawGlass() {
+    const w = JAR.right - JAR.left;
+    svg.appendChild(el('path', {
+        class: 'jar-glass',
+        d: `M ${JAR.left - 9} ${JAR.top - 26} h ${w + 18} v 10 l -9 12 V ${JAR.bottom + 7}
+            q 0 9 -9 9 H ${JAR.left + 9} q -9 0 -9 -9 V ${JAR.top - 4} l -9 -12 z`,
+    }));
+}
+
+function drawGutterScale(layout, layers, bands) {
+    const g = el('g', { class: 'gutter' });
+    if (!layout.focus && layout.scale) {
+        const cap = layout.scale.capacity;
+        const step = cap > 3000 ? 500 : 250;
+        for (let grams = 0; grams <= cap; grams += step / 2) {
+            const y = layout.scale.yOf(grams);
+            if (y < JAR.top - 2) break;
+            const major = grams % step === 0;
+            g.appendChild(el('line', {
+                class: 'gutter-tick' + (major ? ' major' : ''),
+                x1: GUTTER.x - (major ? 12 : 6), x2: GUTTER.x, y1: y, y2: y,
+            }));
+            if (major && grams > 0) {
+                g.appendChild(el('text', {
+                    class: 'gutter-label', x: GUTTER.x - 16, y: y + 3.5, 'text-anchor': 'end',
+                }, fmtInt(grams)));
+            }
+        }
+    } else if (layout.focus) {
+        // The glass admits the lie: dashed etch spanning the stage
+        const b = bands.get(view.focused);
+        if (b) {
+            g.appendChild(el('line', {
+                class: 'gutter-broken', x1: GUTTER.x - 6, x2: GUTTER.x - 6, y1: b.y1, y2: b.y0,
+            }));
+        }
+    }
+    svg.appendChild(g);
+}
+
+function drawBoundaries(layers, bands, recipe) {
+    // Full-width drag strips at: water top, starter top, flour splits
+    const g = el('g');
+    for (let i = 0; i < layers.length; i++) {
+        const layer = layers[i];
+        const draggable =
+            layer.kind === 'water' || layer.kind === 'starter' ||
+            (layer.kind === 'flour' && layer.flourIndex < recipe.flourBreakdown.length - 1);
+        if (!draggable) continue;
+        const y = bands.get(layer.id).y1;
+        g.appendChild(el('line', { class: 'edge-hairline', x1: JAR.left, x2: JAR.right, y1: y, y2: y }));
+        // A small etched grip mark so the edge reads as draggable
+        const cx = (JAR.left + JAR.right) / 2;
+        g.appendChild(el('path', {
+            class: 'edge-grip',
+            d: `M ${cx - 11} ${y - 2.5} h 22 M ${cx - 11} ${y + 2.5} h 22`,
+        }));
+        g.appendChild(el('rect', {
+            class: 'edge-strip', 'data-act': `edge:${layer.id}`,
+            x: JAR.left, y: y - 17, width: JAR.right - JAR.left, height: 34,
+        }));
+    }
+    svg.appendChild(g);
+}
+
+function drawSurface(layers, bands, recipe, state) {
+    const topBand = bands.get(layers[layers.length - 1].id);
+    const y = topBand.y1;
+    const g = el('g', { class: 'surface' });
+    g.appendChild(el('line', { class: 'surface-line', x1: JAR.left - 8, x2: JAR.right + 8, y1: y, y2: y }));
+    // Headline doubles as the batch handle: drag it to scale the recipe
+    g.appendChild(el('text', {
+        class: 'surface-headline', 'data-act': 'surface',
+        x: (JAR.left + JAR.right) / 2, y: y - 10, 'text-anchor': 'middle',
+    }, `${displayGrams(recipe.doughWeight)} g · ${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`));
+    g.appendChild(el('rect', {
+        'data-act': 'surface', x: JAR.left, y: y - 34, width: JAR.right - JAR.left, height: 44, fill: 'transparent',
+    }));
+    svg.appendChild(g);
+}
+
+function drawMarginProxies(thin, recipe) {
+    // Margin labels for thin bands: always readable, and each block is a
+    // fat drag proxy for its band (drag vertically = edit; tap = focus)
+    let lastY = -Infinity;
+    for (const { layer, mid } of thin) {
+        const y = Math.max(mid, lastY + 48);
+        lastY = y;
+        const g = el('g', { class: 'proxy', 'data-act': `proxy:${layer.id}` });
+        g.appendChild(el('path', {
+            class: 'leader',
+            d: `M ${JAR.right + 2} ${mid} H ${RAIL.x - 4} ${Math.abs(y - mid) > 2 ? `L ${RAIL.x + 2} ${y}` : ''}`,
+        }));
+        g.appendChild(el('rect', {
+            class: 'proxy-hit', x: RAIL.x - 2, y: y - 22, width: RAIL.w, height: 44, rx: 7,
+        }));
+        g.appendChild(el('path', {
+            class: 'proxy-grip', d: `M ${RAIL.x + 5} ${y - 13} v 26 M ${RAIL.x + 10} ${y - 13} v 26`,
+        }));
+        g.appendChild(el('text', { class: 'proxy-name', x: RAIL.x + 18, y: y - 5 }, layer.label));
+        g.appendChild(el('text', { class: 'proxy-value', x: RAIL.x + 18, y: y + 11 }, valueLine(layer, recipe)));
+        svg.appendChild(g);
+    }
+}
+
+function drawCellar(recipe) {
+    // The salt cellar: docked above the rim, right side. Twist to season.
+    const cx = JAR.right - 18, cy = JAR.top - 48;
+    const g = el('g', { class: 'cellar', 'data-act': 'cellar' });
+    g.appendChild(el('circle', { class: 'cellar-hit', cx, cy, r: 30 }));
+    const body = el('g', { transform: `rotate(${view.cellarSpin} ${cx} ${cy})` });
+    body.appendChild(el('path', {
+        class: 'cellar-body',
+        d: `M ${cx - 11} ${cy + 14} L ${cx - 8} ${cy - 8} Q ${cx} ${cy - 15} ${cx + 8} ${cy - 8} L ${cx + 11} ${cy + 14} Z`,
+    }));
+    body.appendChild(el('path', { class: 'cellar-cap', d: `M ${cx - 8.5} ${cy - 7} Q ${cx} ${cy - 16} ${cx + 8.5} ${cy - 7}` }));
+    for (const [dx, dy] of [[-3.5, -10], [0, -12], [3.5, -10]]) {
+        body.appendChild(el('circle', { class: 'cellar-hole', cx: cx + dx, cy: cy + dy, r: 1 }));
+    }
+    g.appendChild(body);
+    g.appendChild(el('text', { class: 'cellar-label', x: cx, y: cy + 30, 'text-anchor': 'middle' },
+        `salt ${formatPct(recipe.saltPct)}%`));
+    svg.appendChild(g);
+}
+
+function drawStage(layer, band, recipe, state, magnification) {
+    const k = kindFor(layer);
+    const g = el('g', { class: 'stage', 'data-act': 'stage' });
+    const { y0, y1 } = band;
+    const zig = (y, dir) => {
+        let d = `M ${JAR.left - 6} ${y}`;
+        for (let x = JAR.left - 6; x < JAR.right + 6; x += 12) {
+            d += ` l 6 ${3.5 * dir} l 6 ${-3.5 * dir}`;
+        }
+        return d;
+    };
+    g.appendChild(el('path', { class: 'stage-zig', d: zig(y1, 1) }));
+    g.appendChild(el('path', { class: 'stage-zig', d: zig(y0, -1) }));
+    g.appendChild(el('text', {
+        class: 'stage-mag', x: JAR.right - 48, y: y1 + 18, 'text-anchor': 'end',
+    }, `×${Math.min(99, Math.round(magnification))} scale`));
+
+    // Fine ruler inside the stage: full range of this quantity
+    const [lo, hi] = k.range;
+    const ticks = 8;
+    for (let i = 0; i <= ticks; i++) {
+        const v = lo + (i / ticks) * (hi - lo);
+        const y = y0 - (i / ticks) * (y0 - y1);
+        g.appendChild(el('line', { class: 'stage-tick', x1: JAR.left + 4, x2: JAR.left + 14, y1: y, y2: y }));
+        if (i % 2 === 0) {
+            g.appendChild(el('text', { class: 'stage-tick-label', x: JAR.left + 18, y: y + 3 }, round1(v)));
+        }
+    }
+    // Current value marker
+    const cur = k.value(recipe);
+    const cy = y0 - ((cur - lo) / (hi - lo)) * (y0 - y1);
+    g.appendChild(el('line', { class: 'stage-marker', x1: JAR.left, x2: JAR.right, y1: cy, y2: cy }));
+
+    // Big readout
+    g.appendChild(el('text', {
+        class: 'stage-value', x: JAR.right - 52, y: (y0 + y1) / 2 - 2, 'text-anchor': 'end',
+    }, `${round1(cur)}%`));
+    g.appendChild(el('text', {
+        class: 'stage-sub', x: JAR.right - 52, y: (y0 + y1) / 2 + 16, 'text-anchor': 'end',
+    }, `${layer.label} · ${displayGrams(layer.grams)} g`));
+
+    // -/+ endcaps (single snap step each)
+    const bx = JAR.right - 26;
+    for (const [sign, y] of [[1, y1 + 26], [-1, y0 - 26]]) {
+        g.appendChild(el('g', { 'data-act': `step:${sign}` },
+            el('circle', { class: 'stage-btn', cx: bx, cy: y, r: 15 }),
+            el('text', { class: 'stage-btn-label', x: bx, y: y + 5, 'text-anchor': 'middle' }, sign > 0 ? '+' : '−')));
+    }
+    // Visible close: top-left of the stage
+    g.appendChild(el('g', { 'data-act': 'close-stage', class: 'text-btn' },
+        el('circle', { class: 'stage-btn', cx: JAR.left + 22, cy: y1 - 22, r: 13 }),
+        el('text', { class: 'stage-btn-label', x: JAR.left + 22, y: y1 - 17, 'text-anchor': 'middle', 'font-size': '15' }, '✕')));
+
+    // Kind-specific extras
+    if (layer.kind === 'starter') {
+        // Internal flour/water divide, honest split
+        const frac = recipe.starterFlour / recipe.starterMass;
+        const splitY = y0 - (y0 - y1) * frac;
+        g.appendChild(el('line', { class: 'stage-split', x1: JAR.left + 60, x2: JAR.right - 110, y1: splitY, y2: splitY }));
+        g.appendChild(el('text', { class: 'stage-note', x: JAR.left + 60, y: splitY - 5 },
+            `${displayGrams(recipe.starterFlour)} g flour · ${displayGrams(recipe.starterWater)} g water`));
+        const liquid = state.starter.hydration >= 90;
+        g.appendChild(mkTextButton(JAR.left + 60, y0 - 14, liquid ? '● liquid' : '○ liquid', 'starter-liquid'));
+        g.appendChild(mkTextButton(JAR.left + 130, y0 - 14, liquid ? '○ stiff' : '● stiff', 'starter-stiff'));
+    }
+    if (layer.kind === 'flour') {
+        g.appendChild(mkTextButton(JAR.left + 60, y0 - 14, 'change type ▸', `flour-type:${layer.flourIndex}`));
+        if (state.flours.length > 1) {
+            g.appendChild(mkTextButton(JAR.left + 170, y0 - 14, 'remove', `flour-remove:${layer.flourIndex}`));
+        }
+    }
+    svg.appendChild(g);
+}
+
+function mkTextButton(x, y, label, act) {
+    return el('g', { 'data-act': act, class: 'text-btn' },
+        el('rect', { x: x - 6, y: y - 14, width: label.length * 7 + 12, height: 20, rx: 5, fill: 'transparent' }),
+        el('text', { x, y }, label));
+}
+
+function drawHeadspace(layers, bands, recipe, state, now) {
+    const topY = bands.get(layers[layers.length - 1].id).y1;
+    const y = Math.max(JAR.top + 22, topY - 46);
+    const g = el('g', { class: 'headspace' });
+    if (view.zoneFlash && now < view.zoneFlash.until) {
+        g.appendChild(el('text', {
+            class: 'zone-flash', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
+        }, view.zoneFlash.name));
+        requestAnimationFrame(() => store.rerender());
+    } else if (view.focused) {
+        const layer = layers.find(l => l.id === view.focused);
+        if (layer) {
+            const kindKey = layer.kind === 'water' ? 'hydration' : layer.kind === 'flour' ? 'grain' : layer.kind;
+            const val = layer.kind === 'water' ? recipe.hydration
+                : layer.kind === 'flour' ? recipe.wholeGrainPct
+                : layer.kind === 'starter' ? recipe.starterPct : recipe.saltPct;
+            g.appendChild(el('text', {
+                class: 'headspace-caption', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
+            }, caption(kindKey, val)));
+        }
+    } else if (now < view.undoUntil && view.undo.length) {
+        g.appendChild(mkTextButton((JAR.left + JAR.right) / 2 - 30, y, '↶ undo', 'undo'));
+    } else {
+        g.appendChild(el('text', {
+            class: 'headspace-stats', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
+        }, `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented`));
+    }
+    svg.appendChild(g);
+}
+
+let ghosts = [];   // { y, label, until }
+
+function drawGhosts(now) {
+    ghosts = ghosts.filter(g => now < g.until);
+    if (!ghosts.length) return;
+    const g = el('g', { class: 'ghosts' });
+    for (const ghost of ghosts) {
+        const alpha = Math.min(1, (ghost.until - now) / 600);
+        g.appendChild(el('line', {
+            class: 'ghost-line', x1: JAR.left, x2: JAR.right, y1: ghost.y, y2: ghost.y, opacity: alpha * 0.7,
+        }));
+        if (ghost.label) {
+            g.appendChild(el('text', {
+                class: 'ghost-label', x: JAR.right - 8, y: ghost.y - 4, 'text-anchor': 'end', opacity: alpha,
+            }, ghost.label));
+        }
+    }
+    svg.appendChild(g);
+    requestAnimationFrame(() => store.rerender());
+}
+
+function drawShelf(recipe, state) {
+    const g = el('g', { class: 'shelf' });
+    const cy = SHELF.y + 26;
+    g.appendChild(el('line', { class: 'shelf-line', x1: 40, x2: 350, y1: SHELF.y + 44, y2: SHELF.y + 44 }));
+    // Boules: one per loaf, radius follows per-loaf weight
+    const n = state.numLoaves;
+    const r = Math.max(10, Math.min(20, 8 + recipe.weightPerLoaf / 90));
+    const span = Math.min(200, n * (r * 2 + 10));
+    const x0 = 195 - span / 2 + r;
+    for (let i = 0; i < n; i++) {
+        const bx = x0 + i * (span - r * 2) / Math.max(1, n - 1 || 1);
+        const boule = el('g', { class: 'boule' },
+            el('ellipse', { cx: bx, cy: SHELF.y + 36, rx: r, ry: r * 0.62 }),
+            el('path', { class: 'score', d: `M ${bx - r * 0.5} ${SHELF.y + 33} q ${r * 0.5} -4 ${r} 0` }));
+        g.appendChild(boule);
+    }
+    g.appendChild(mkTextButton(52, cy + 4, '−', 'loaf-minus'));
+    g.appendChild(mkTextButton(318, cy + 4, '+', 'loaf-plus'));
+    g.appendChild(el('text', { class: 'shelf-label', x: 195, y: SHELF.y + 58, 'text-anchor': 'middle' },
+        `${numberWord(n)} ${n === 1 ? 'loaf' : 'loaves'} · ${displayGrams(recipe.weightPerLoaf)} g each · ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked`));
+    svg.appendChild(g);
+}
+
+function drawGrains(now) {
+    view.grains = view.grains.filter(gr => now < gr.until);
+    if (!view.grains.length) return;
+    const g = el('g');
+    for (const grain of view.grains) {
+        const t = 1 - (grain.until - now) / grain.ms;
+        g.appendChild(el('circle', {
+            class: 'grain', cx: grain.x + Math.sin(t * 9 + grain.seed) * 2.5,
+            cy: grain.y0 + (grain.y1 - grain.y0) * t, r: 1.1, opacity: 1 - t * 0.4,
+        }));
+    }
+    svg.appendChild(g);
+    requestAnimationFrame(() => store.rerender());
+}
+
+let diffChip = null;   // { x, y, main, sub }
+
+function drawDiffChip() {
+    if (!diffChip) return;
+    const g = el('g', { class: 'diff-chip' });
+    const w = Math.max(diffChip.main.length, diffChip.sub.length) * 7.4 + 20;
+    const x = Math.min(390 - w - 4, Math.max(4, diffChip.x - w / 2));
+    const y = Math.max(30, diffChip.y - 58);
+    g.appendChild(el('rect', { x, y, width: w, height: 42, rx: 8 }));
+    g.appendChild(el('text', { class: 'chip-main', x: x + 10, y: y + 18 }, diffChip.main));
+    g.appendChild(el('text', { class: 'chip-sub', x: x + 10, y: y + 34 }, diffChip.sub));
+    svg.appendChild(g);
+}
+
+/* ---------- pointer machine (delegated on the svg root) ---------- */
+
+function svgPoint(e) {
+    const r = svg.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (390 / r.width), y: (e.clientY - r.top) * (660 / r.height) };
+}
+
+let ptr = null;   // active pointer session
+
+svg.addEventListener('pointerdown', e => {
+    const target = e.target.closest?.('[data-act]');
+    if (!target) return;
+    e.preventDefault();
+    svg.setPointerCapture(e.pointerId);
+    const { state } = store.get();
+    const recipe = model.derive(state);
+    const p = svgPoint(e);
+    ptr = {
+        act: target.getAttribute('data-act'),
+        startState: state,
+        start: p,
+        last: p,
+        moved: false,
+        recipe0: recipe,
+        cellarLastAngle: Math.atan2(p.x - (JAR.right - 18), (JAR.top - 48) - p.y) * 180 / Math.PI,
+        cellarAcc: 0,
+    };
+    gesturing = true;
+});
+
+svg.addEventListener('pointermove', e => {
+    if (!ptr) return;
+    const p = svgPoint(e);
+    if (!ptr.moved && Math.hypot(p.x - ptr.start.x, p.y - ptr.start.y) > 6) ptr.moved = true;
+    ptr.last = p;
+    if (!ptr.moved) return;
+    routeDrag(p);
+});
+
+function routeDrag(p) {
+    const [verb, arg] = ptr.act.split(':');
+    const { state } = store.get();
+    const recipe = model.derive(state);
+    const layers = buildLayers(recipe);
+
+    if (verb === 'edge' || verb === 'proxy') {
+        const layer = layers.find(l => l.id === arg);
+        if (!layer) return;
+        const k = kindFor(layer);
+        const r0 = model.derive(ptr.startState);
+        const layer0 = buildLayers(r0).find(l => l.id === arg);
+        let raw;
+        if (verb === 'edge') {
+            // Edge drags are honest: dy converts through the jar's gram scale
+            const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
+            raw = k.fromGrams(r0, layer0.grams + (ptr.start.y - p.y) * scale.gramsPerPx);
+        } else {
+            // Proxy drags are the fine lane: fixed value-units per pixel,
+            // tuned per kind so 20 g of salt is as controllable as water
+            raw = k.value(r0) + (ptr.start.y - p.y) * k.perPx;
+        }
+        const v = applyEdit(layer, raw);
+        const r2 = model.derive(store.get().state);
+        const l2 = buildLayers(r2).find(l => l.id === arg);
+        diffChip = {
+            x: p.x, y: p.y,
+            main: `${layer.label} ${round1(v)}%`,
+            sub: `${displayGrams(l2.grams)} g (${l2.grams >= layer0.grams ? '+' : ''}${fmtInt(l2.grams - layer0.grams)} g)`,
+        };
+        store.rerender();
+    } else if (verb === 'surface') {
+        const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
+        const d0 = model.derive(ptr.startState).doughWeight;
+        const target = Math.round((d0 + (ptr.start.y - p.y) * scale.gramsPerPx) / 25) * 25;
+        store.apply(s => model.scaleToDoughWeight(s, target));
+        const r2 = model.derive(store.get().state);
+        diffChip = {
+            x: p.x, y: p.y,
+            main: `${displayGrams(r2.doughWeight)} g of dough`,
+            sub: `${displayGrams(r2.weightPerLoaf)} g per loaf`,
+        };
+        store.rerender();
+    } else if (verb === 'stage' || (verb === 'band' && view.focused === arg)) {
+        // Dragging the magnified band itself edits it - same as the stage
+        const layer = layers.find(l => l.id === view.focused);
+        if (!layer) return;
+        const layout = computeBands(layers, recipe);
+        const b = layout.bands.get(layer.id);
+        const k = kindFor(layer);
+        const frac = Math.min(1, Math.max(0, (b.y0 - p.y) / (b.y0 - b.y1)));
+        const v = applyEdit(layer, k.range[0] + frac * (k.range[1] - k.range[0]));
+        diffChip = { x: p.x, y: p.y, main: `${round1(v)}%`, sub: layer.label };
+        store.rerender();
+    } else if (verb === 'cellar') {
+        const cx = JAR.right - 18, cy = JAR.top - 48;
+        const ang = Math.atan2(p.x - cx, cy - p.y) * 180 / Math.PI;
+        let d = ang - ptr.cellarLastAngle;
+        while (d > 180) d -= 360;
+        while (d <= -180) d += 360;
+        ptr.cellarLastAngle = ang;
+        ptr.cellarAcc += d;
+        view.cellarSpin += d;
+        // Every 15 degrees = one 0.1% detent
+        while (Math.abs(ptr.cellarAcc) >= 15) {
+            const sign = Math.sign(ptr.cellarAcc);
+            ptr.cellarAcc -= sign * 15;
+            const cur = model.derive(store.get().state).saltPct;
+            store.apply(s => model.setSalt(s, Math.round((cur + sign * 0.1) * 10) / 10));
+            navigator.vibrate?.(5);
+            if (sign > 0) spawnGrains();
+        }
+        const r2 = model.derive(store.get().state);
+        diffChip = {
+            x: p.x, y: p.y,
+            main: `salt ${formatPct(r2.saltPct)}%`,
+            sub: `${displayGrams(r2.salt)} g · twist to season`,
+        };
+        store.rerender();
+    }
+}
+
+function spawnGrains() {
+    const now = performance.now();
+    const { state } = store.get();
+    const recipe = model.derive(state);
+    const layers = buildLayers(recipe);
+    const layout = computeBands(layers, recipe);
+    const saltY = layout.bands.get('salt')?.y1 ?? JAR.bottom - 100;
+    for (let i = 0; i < 5; i++) {
+        view.grains.push({
+            x: JAR.right - 30 + Math.random() * 24, y0: JAR.top - 30,
+            y1: saltY - 1, ms: 500 + Math.random() * 250,
+            until: now + 500 + Math.random() * 250, seed: Math.random() * 9,
+        });
+    }
+}
+
+svg.addEventListener('pointerup', e => {
+    if (!ptr) return;
+    if (svg.hasPointerCapture?.(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    const session = ptr;
+    ptr = null;
+    gesturing = false;
+    diffChip = null;
+
+    if (session.moved || Math.abs(session.cellarAcc) > 0.01 || session.act === 'cellar' && session.moved) {
+        commitGesture(session.startState);
+        store.rerender();
+        return;
+    }
+    handleTap(session.act);
+});
+
+svg.addEventListener('pointercancel', () => {
+    ptr = null;
+    gesturing = false;
+    diffChip = null;
+    store.rerender();
+});
+
+function commitGesture(startState) {
+    view.undo.push(startState);
+    if (view.undo.length > 20) view.undo.shift();
+    view.undoUntil = performance.now() + 5000;
+    setTimeout(() => store.rerender(), 5100);
+}
+
+function handleTap(act) {
+    const [verb, arg] = act.split(':');
+    const { state } = store.get();
+
+    if (verb === 'band' || verb === 'proxy') {
+        if (view.focused === arg) exitFocus();
+        else enterFocus(arg);
+    } else if (verb === 'cellar') {
+        enterFocus('salt');
+    } else if (verb === 'close-stage') {
+        exitFocus();
+    } else if (verb === 'step') {
+        const recipe = model.derive(state);
+        const layer = buildLayers(recipe).find(l => l.id === view.focused);
+        if (!layer) return;
+        const k = kindFor(layer);
+        view.undo.push(state);
+        const cur = k.value(recipe);
+        store.apply(s => k.edit(s, Math.min(k.range[1], Math.max(k.range[0],
+            Math.round((cur + Number(arg) * k.step) * 100) / 100))));
+    } else if (verb === 'undo') {
+        const prev = view.undo.pop();
+        if (prev) {
+            view.undoUntil = 0;
+            store.apply(() => prev);
+        }
+    } else if (verb === 'loaf-minus' || verb === 'loaf-plus') {
+        store.apply(s => model.setNumLoaves(s, s.numLoaves + (verb === 'loaf-plus' ? 1 : -1)));
+    } else if (verb === 'starter-liquid' || verb === 'starter-stiff') {
+        view.undo.push(state);
+        store.apply(s => model.setStarterHydration(s, verb === 'starter-liquid' ? 100 : 60));
+    } else if (verb === 'flour-type') {
+        const i = Number(arg);
+        const keys = Object.keys(model.FLOUR_TYPES);
+        view.undo.push(state);
+        store.apply(s => {
+            const curKey = s.flours[i].key;
+            const used = new Set(s.flours.map(f => f.key));
+            let next = curKey;
+            for (let step = 1; step <= keys.length; step++) {
+                const cand = keys[(keys.indexOf(curKey) + step) % keys.length];
+                if (!used.has(cand) || cand === curKey) { next = cand; break; }
+            }
+            return model.setFlourBlend(s, s.flours.map((f, fi) => ({ key: fi === i ? next : f.key, pct: f.pct })));
+        });
+    } else if (verb === 'flour-remove') {
+        const i = Number(arg);
+        view.undo.push(state);
+        exitFocus();
+        store.apply(s => model.setFlourBlend(s, s.flours.filter((_, fi) => fi !== i)));
+    }
+}
+
+/* ---------- focus transitions ---------- */
+
+function snapshotBands() {
+    const { state } = store.get();
+    const recipe = model.derive(state);
+    const layers = buildLayers(recipe);
+    return computeBands(layers, recipe).bands;
+}
+
+function enterFocus(id) {
+    if (view.focused === id) return;
+    const from = snapshotBands();
+    view.focused = id;
+    view.lerp = { from, start: performance.now(), ms: 200 };
+    store.rerender();
+}
+
+function exitFocus() {
+    if (!view.focused) return;
+    const from = snapshotBands();
+    view.focused = null;
+    view.lerp = { from, start: performance.now(), ms: 200 };
+    store.rerender();
+}
+
+/* ---------- presets: ghost diff + pour-in ---------- */
 
 const presetSelect = $('preset-select');
 for (const preset of PRESETS) {
@@ -542,52 +871,26 @@ for (const preset of PRESETS) {
 presetSelect.addEventListener('change', () => {
     const preset = getPreset(presetSelect.value);
     if (!preset) return;
-    selected = 'water';
+    const { state } = store.get();
+    view.undo.push(state);
+    // Ghost hairlines: where the old edges were, labeled with the deltas
+    const oldBands = snapshotBands();
+    const oldRecipe = model.derive(state);
+    view.focused = null;
     prevCapacity = null;
     store.apply(() => model.sanitizeState(preset.state));
-});
-
-/* ---------- render ---------- */
-
-function render(state) {
-    const recipe = model.derive(state);
-    const layers = buildLayers(recipe);
-
-    const sig = layers.map(l => l.id).join('|');
-    if (sig !== structureSig) {
-        structureSig = sig;
-        rebuildStructure(layers);
-    }
-
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: dragging });
-    prevCapacity = scale.capacity;
-
-    let cum = 0;
-    for (const layer of layers) {
-        const y0 = scale.yOf(cum);
-        cum += layer.grams;
-        let y1 = scale.yOf(cum);
-        if (layer.kind === 'salt' && y0 - y1 < 4) y1 = y0 - 4;
-        const rect = nodes.bands.get(layer.id);
-        rect.setAttribute('y', y1);
-        rect.setAttribute('height', Math.max(0, y0 - y1));
-        rect.classList.toggle('selected', selected === layer.id);
-
-        const boundary = nodes.boundaries.get(layer.id);
-        if (boundary) {
-            const line = boundary.querySelector('.boundary-line');
-            line.setAttribute('y1', y1);
-            line.setAttribute('y2', y1);
-            boundary.querySelector('.grab').setAttribute('y', y1 - 18);
-            nodes.tabs.get(layer.id)?.setAttribute('transform', `translate(0, ${y1})`);
+    const newRecipe = model.derive(store.get().state);
+    const now = performance.now();
+    ghosts = [];
+    for (const [id, b] of oldBands) {
+        if (id === 'water') {
+            const d = newRecipe.hydration - oldRecipe.hydration;
+            ghosts.push({ y: b.y1, until: now + 1800, label: `${d >= 0 ? '+' : ''}${round1(d)}% hydration` });
         }
     }
-
-    nodes.surface.setAttribute('transform', `translate(0, ${scale.yOf(cum)})`);
-
-    renderChips(recipe, state);
-    renderBatch(recipe, state);
-}
+    view.pour = { start: now, ms: 800 };
+    store.rerender();
+});
 
 /* ---------- boot ---------- */
 

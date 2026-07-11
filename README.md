@@ -73,9 +73,12 @@ it comes with you.
 - **Ⅰ The Living Recipe** - the formula as editable prose. Tap any
   underlined value; the whole document (ingredients, day-by-day schedule)
   rewrites itself live. Printing it gives you a recipe card.
-- **Ⅱ Dough Canvas** - the dough as a glass jar of layered ingredients.
-  Drag a layer boundary to change a ratio, pull the surface ring to scale
-  the batch, tap a layer to read about it.
+- **Ⅱ Dough Canvas** - the dough as a living, self-annotating jar. Every
+  layer is typeset with its grams and percent against an etched gram
+  scale; drag any edge (or a margin label - thin layers get fat proxy
+  handles), tap a layer to magnify it on an honest broken scale, twist
+  the salt cellar to season, and watch your loaves sit on the boule
+  shelf below.
 - **Ⅲ Mission Control** - the bake as a ribbon of time with a broken axis
   (the cold retard is compressed with torn edges), day/night shading, and
   a NOW cursor. Drag the paper to move your start, drag the bake block to

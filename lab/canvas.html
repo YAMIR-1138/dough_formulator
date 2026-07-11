@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Dough Canvas - your dough as a picture, your ingredients as living cards.">
+    <meta name="description" content="Dough Canvas - the formula as a living, self-annotating jar you sculpt by touch.">
     <title>Ⅱ Dough Canvas - THE LAB</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="lab.css">
 </head>
 <body>
-    <div class="page wide">
+    <div class="page canvas-page">
         <nav id="lab-nav"></nav>
 
         <header class="canvas-header">
@@ -25,18 +25,11 @@
             </select>
         </header>
 
-        <div class="drag-hud" id="hud" aria-live="polite"></div>
+        <svg id="jar" class="jar-svg v3" viewBox="0 0 390 660" aria-label="Dough composition canvas"></svg>
 
-        <div class="canvas-main">
-            <svg id="jar" class="jar-svg" viewBox="0 0 320 600" aria-label="Dough composition jar"></svg>
-            <div class="chips" id="chips"></div>
-        </div>
-
-        <div class="batch-bar" id="batch-bar"></div>
-
-        <p class="caption no-print" style="margin-top:0.6rem">
-            The cards are the controls - tap one to open its editor. The jar is the picture:
-            pull its handles for the big moves, and everything stays in sync.
+        <p class="caption no-print canvas-hint">
+            Everything happens on the glass: drag an edge or a margin label, tap a layer to
+            magnify it, twist the salt cellar. The jar tells you the rest.
         </p>
     </div>
 

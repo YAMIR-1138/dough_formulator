@@ -3,6 +3,7 @@ import {
     DIAL, angleOf, valueOf, pointerAngle, angleDelta, arcPath,
     makeTimeScale, shadingBands, dayBoundaries,
     niceCeil, makeJarScale, numberWord, caption, batchCaption,
+    makeFocusScale, hydrationZone, magneticSnap,
 } from '../lab/lab-geometry.js';
 import { defaultState, derive } from '../js/model.js';
 import { buildSteps, schedule } from '../js/ferment.js';
@@ -110,4 +111,33 @@ test('numberWord and captions', () => {
     eq(caption('starter', 20), 'the classic clip - bulk in an afternoon', 'starter band');
     eq(caption('grain', 0), 'all white: mild, tall, open', 'grain zero');
     ok(batchCaption(2, 885).includes('two'), 'batch caption words the count');
+});
+
+test('Focus scale: stage gets stagePx, rest proportional, monotonic', () => {
+    const items = [
+        { id: 'water', grams: 650 }, { id: 'starter', grams: 200 },
+        { id: 'salt', grams: 20 }, { id: 'bread', grams: 800 }, { id: 'ww', grams: 100 },
+    ];
+    const fs = makeFocusScale(items, 'salt', { jarTopY: 90, jarBottomY: 560, stagePx: 180, headroomPx: 50 });
+    const salt = fs.get('salt');
+    close(salt.y0 - salt.y1, 180, 1e-9, 'focused band = stagePx');
+    const totalPx = fs.bands.reduce((s, b) => s + (b.y0 - b.y1), 0);
+    close(totalPx, 560 - 90 - 50, 1e-6, 'bands fill usable height');
+    for (let i = 1; i < fs.bands.length; i++) {
+        close(fs.bands[i].y0, fs.bands[i - 1].y1, 1e-9, `band ${i} stacks on band ${i - 1}`);
+    }
+    ok(fs.magnification > 20, `salt magnified (x${fs.magnification.toFixed(0)})`);
+    // Unfocused bands keep their ratio: bread/water = 800/650
+    const bread = fs.get('bread'), water = fs.get('water');
+    close((bread.y0 - bread.y1) / (water.y0 - water.y1), 800 / 650, 1e-6, 'rest proportional');
+});
+
+test('Hydration zones and magnetic snap', () => {
+    eq(hydrationZone(60), 'bagel zone', 'bagel');
+    eq(hydrationZone(75), 'country zone', 'country');
+    eq(hydrationZone(85), 'ciabatta zone', 'ciabatta');
+    close(magneticSnap(74.3, 0.5, [75]), 75, 1e-9, 'canonical captures from wide radius');
+    close(magneticSnap(72.8, 0.5, [75]), 73, 1e-9, 'outside radius snaps to step');
+    close(magneticSnap(1.94, 0.1, [2]), 2, 1e-9, 'salt canonical');
+    close(magneticSnap(1.62, 0.1, [2]), 1.6, 1e-9, 'salt plain snap');
 });

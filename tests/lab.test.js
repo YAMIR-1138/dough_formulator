@@ -104,10 +104,10 @@ test('numberWord and captions', () => {
     eq(numberWord(1), 'one', 'one');
     eq(numberWord(2), 'two', 'two');
     eq(numberWord(40), '40', 'falls back to digits');
-    eq(caption('hydration', 75), 'slack, open crumb; hard to shape — flour your hands', 'hydration band');
+    eq(caption('hydration', 75), 'slack, open crumb; hard to shape - flour your hands', 'hydration band');
     eq(caption('hydration', 73.9), 'the sweet spot: open but manageable', 'band edge below');
-    eq(caption('hydration', 74), 'slack, open crumb; hard to shape — flour your hands', 'band edge at');
-    eq(caption('starter', 20), 'the classic clip — bulk in an afternoon', 'starter band');
+    eq(caption('hydration', 74), 'slack, open crumb; hard to shape - flour your hands', 'band edge at');
+    eq(caption('starter', 20), 'the classic clip - bulk in an afternoon', 'starter band');
     eq(caption('grain', 0), 'all white: mild, tall, open', 'grain zero');
     ok(batchCaption(2, 885).includes('two'), 'batch caption words the count');
 });

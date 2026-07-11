@@ -1,5 +1,5 @@
 /**
- * lab-geometry.js — pure math and text helpers for THE LAB.
+ * lab-geometry.js - pure math and text helpers for THE LAB.
  * No DOM, no Date.now(): everything here runs under Node for testing.
  */
 
@@ -187,28 +187,28 @@ export function numberWord(n) {
 
 const CAPTION_BANDS = {
     hydration: [
-        [62, 'tight and obedient — bagel country'],
+        [62, 'tight and obedient - bagel country'],
         [68, 'sturdy, easy shaping, even crumb'],
         [74, 'the sweet spot: open but manageable'],
-        [80, 'slack, open crumb; hard to shape — flour your hands'],
+        [80, 'slack, open crumb; hard to shape - flour your hands'],
         [88, 'ciabatta territory; trust the scraper, not your palms'],
         [Infinity, 'basically batter. Brave. Use a pan.'],
     ],
     starter: [
-        [8, 'a slow burn — an all-day (or overnight) bulk'],
+        [8, 'a slow burn - an all-day (or overnight) bulk'],
         [15, 'relaxed pace, deeper flavor'],
-        [25, 'the classic clip — bulk in an afternoon'],
+        [25, 'the classic clip - bulk in an afternoon'],
         [35, 'fast mover; watch the dough, not the clock'],
-        [Infinity, 'sprinting — don’t leave the house'],
+        [Infinity, 'sprinting - don’t leave the house'],
     ],
     grain: [
         [1, 'all white: mild, tall, open'],
-        [15, 'a whisper of wheat — the Tartine move'],
+        [15, 'a whisper of wheat - the Tartine move'],
         [35, 'nutty and noticeably faster to ferment'],
         [Infinity, 'hearty, tighter crumb, drinks extra water'],
     ],
     salt: [
-        [1.5, 'quiet — the flour does the talking'],
+        [1.5, 'quiet - the flour does the talking'],
         [2.3, 'classic seasoning; steady fermentation'],
         [Infinity, 'assertive, and it slows the yeast down'],
     ],

@@ -1,6 +1,6 @@
 /**
- * ferment.js — fermentation model and bake scheduler.
- * Pure module: no DOM, no Date.now() — callers supply anchor times.
+ * ferment.js - fermentation model and bake scheduler.
+ * Pure module: no DOM, no Date.now() - callers supply anchor times.
  *
  * Temperature model: Q10. Biological reaction rates roughly multiply by Q10
  * for every +10°C, so duration(T) = base * Q10^((T_ref − T)/10). This replaces
@@ -10,7 +10,7 @@
 import { clamp } from './format.js';
 
 export const Q10 = 2.5;
-export const T_REF = 22;             // °C — calibration baseline
+export const T_REF = 22;             // °C - calibration baseline
 export const BASE_BULK_MIN = 240;    // 4h bulk at 22°C, 20% starter, ~10% WG
 const REF_STARTER_PCT = 20;
 
@@ -40,7 +40,7 @@ export function bulkMinutes({ roomTemp, starterPct, wholeGrainPct }) {
 }
 
 // The user's known-good baseline is 4h bulk at 22°C / 20% starter / 10% whole
-// grain — normalize so that exact combination returns BASE_BULK_MIN.
+// grain - normalize so that exact combination returns BASE_BULK_MIN.
 const wholeGrainNormalizer = wholeGrainFactor(10);
 
 /** Starter feed → peak time in minutes at a given room temp (~5h at 22°C). */
@@ -151,7 +151,7 @@ export function buildSteps(recipe, env) {
     steps.push({
         id: 'cool',
         label: 'Cool',
-        description: 'Cool on a rack at least 1 hour — the crumb is still setting.',
+        description: 'Cool on a rack at least 1 hour - the crumb is still setting.',
         minutes: 60,
     });
 

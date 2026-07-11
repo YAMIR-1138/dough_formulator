@@ -1,5 +1,5 @@
 /**
- * storage.js — LocalStorage persistence for saved formulas.
+ * storage.js - LocalStorage persistence for saved formulas.
  * Migrates data from the previous app versions: both the old key names
  * (sourdough_* → dough_formulator_*) and the old recipe shape
  * ({doughWeight, flourWeight, starter:{amount,unit}, flourBlend:[{type,percentage}]})

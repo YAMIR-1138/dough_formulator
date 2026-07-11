@@ -1,9 +1,9 @@
 /**
- * model.js — the baker's math engine.
+ * model.js - the baker's math engine.
  *
  * Canonical state is flour-normalized baker's percentages with total flour
  * (grams) as the single scaling anchor. Every user edit maps to exactly one
- * closed-form pure function on this state — no lock matrix, no iteration,
+ * closed-form pure function on this state - no lock matrix, no iteration,
  * no over-constraint. Grams shown in the UI are always derived.
  *
  * Conventions (documented in the UI):
@@ -71,14 +71,14 @@ function solidAddInPct(state) {
     return state.addIns.reduce((sum, a) => sum + (a.liquid ? 0 : a.pct), 0);
 }
 
-/** doughWeight / flourTotal — the closed-form scaling factor. */
+/** doughWeight / flourTotal - the closed-form scaling factor. */
 function doughFactor(state) {
     return 1 + state.hydration / 100 + state.saltPct / 100 + solidAddInPct(state) / 100;
 }
 
 /**
  * Derive every displayable quantity from the canonical state.
- * All values are exact floats — rounding is format.js's job.
+ * All values are exact floats - rounding is format.js's job.
  */
 export function derive(state) {
     const { flourTotal, hydration, saltPct, starter } = state;
@@ -95,7 +95,7 @@ export function derive(state) {
     const solidAddInMass = addIns.reduce((sum, a) => sum + (a.liquid ? 0 : a.grams), 0);
 
     const flourToAdd = flourTotal - starterFlour;
-    // Liquid add-ins count as water, so plain water shrinks to compensate —
+    // Liquid add-ins count as water, so plain water shrinks to compensate -
     // true hydration holds without the user doing anything.
     const waterToAdd = Math.max(0, totalWater - starterWater - liquidAddInWater);
     const reservedWater = waterToAdd * (state.reservedWaterPct / 100);
@@ -150,7 +150,7 @@ export function derive(state) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Pure edit functions — each returns a NEW state.                     */
+/* Pure edit functions - each returns a NEW state.                     */
 /* ------------------------------------------------------------------ */
 
 export function setHydration(state, pct) {
@@ -168,7 +168,7 @@ export function setStarterPercent(state, pct) {
     };
 }
 
-/** Grams is just an entry mode for starter — it converts to a percentage. */
+/** Grams is just an entry mode for starter - it converts to a percentage. */
 export function setStarterGrams(state, grams) {
     return setStarterPercent(state, (grams / state.flourTotal) * 100);
 }
@@ -249,7 +249,7 @@ export function setAddIns(state, addIns) {
     };
 }
 
-/** Grams entry mode for an add-in — converts to % of flour. */
+/** Grams entry mode for an add-in - converts to % of flour. */
 export function addInGramsToPct(state, grams) {
     return (grams / state.flourTotal) * 100;
 }

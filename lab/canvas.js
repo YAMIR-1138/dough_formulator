@@ -1,28 +1,30 @@
 /**
- * canvas.js — Concept Ⅱ: Dough Canvas.
- * The formula as a jar of layered ingredients (bottom→top: water, starter,
- * salt seam, flour blend bands). Every boundary drag resizes the band
- * directly below it, so the pointer tracks honestly:
- *   top of water    → hydration          top of starter → starter grams
- *   flour∕flour     → blend pair         surface ring   → dough weight
+ * canvas.js - Concept II: Dough Canvas, v2.
+ *
+ * The jar is the picture; the chip cards are the interface. Every
+ * ingredient has a permanent, same-sized card (color swatch, name, grams,
+ * percent) that expands into its editor when selected. The jar keeps the
+ * gestures it is good at: dragging the big boundaries and the surface.
+ * Small quantities (salt, thin flour shares) are never drag targets, so
+ * they are never useless.
  */
 import * as model from '../js/model.js';
 import { displayGrams, formatPct, round1 } from '../js/format.js';
 import { loadFromHash, createStore, renderSwitcher, el } from './lab-common.js';
 import { makeJarScale, caption, numberWord } from './lab-geometry.js';
+import { PRESETS, getPreset } from '../js/presets.js';
 
 const $ = id => document.getElementById(id);
 renderSwitcher($('lab-nav'), 'canvas');
 
-const JAR = { left: 60, right: 250, top: 60, bottom: 560 };
-const ANNOT_X = 262;
+const JAR = { left: 70, right: 250, top: 50, bottom: 550 };
 const svg = $('jar');
 
 const boot = loadFromHash();
 const store = createStore({ state: boot.state, env: boot.env, onRender: render });
 
 let prevCapacity = null;
-let selected = 'water';        // which layer the detail panel shows
+let selected = 'water';
 let dragging = false;
 
 const FLOUR_COLORS = {
@@ -33,10 +35,6 @@ const FLOUR_COLORS = {
 
 /* ---------- layer model ---------- */
 
-/**
- * Layers bottom→top with grams from derive(). Each: { id, label, grams,
- * color, kind } — kind drives detail panel + drag mapping.
- */
 function buildLayers(recipe) {
     const layers = [
         { id: 'water', label: 'Water', grams: recipe.waterToAdd, color: 'var(--water)', kind: 'water' },
@@ -50,7 +48,6 @@ function buildLayers(recipe) {
             kind: 'flour', flourIndex: i, flourKey: f.key,
         });
     });
-    // Solid add-ins ride on top, non-draggable
     recipe.addIns.forEach((a, i) => {
         if (!a.liquid && a.grams > 0) {
             layers.push({ id: `addin-${i}`, label: a.name || 'Add-in', grams: a.grams, color: 'var(--good)', kind: 'addin' });
@@ -59,16 +56,15 @@ function buildLayers(recipe) {
     return layers;
 }
 
-/* ---------- persistent SVG structure ---------- */
+/* ---------- jar SVG (persistent structure) ---------- */
 
 let structureSig = '';
-let nodes = null; // { bands: Map, boundaries: Map, surface, annots, ghost }
+let nodes = null;
 
 function rebuildStructure(layers) {
     svg.innerHTML = '';
-    nodes = { bands: new Map(), boundaries: new Map(), annots: new Map(), tabs: new Map() };
+    nodes = { bands: new Map(), boundaries: new Map(), tabs: new Map() };
 
-    // Jar outline (drawn behind the bands)
     const w = JAR.right - JAR.left;
     svg.appendChild(el('path', {
         class: 'jar-glass',
@@ -78,61 +74,47 @@ function rebuildStructure(layers) {
 
     const bandGroup = el('g');
     const boundaryGroup = el('g');
-    const annotGroup = el('g');
-    svg.append(bandGroup, boundaryGroup, annotGroup);
+    svg.append(bandGroup, boundaryGroup);
 
     for (const layer of layers) {
         const rect = el('rect', {
             class: 'band', 'data-id': layer.id,
-            x: JAR.left, width: JAR.right - JAR.left, rx: 2, fill: layer.color,
+            x: JAR.left, width: w, rx: 2, fill: layer.color,
         });
-        rect.addEventListener('click', () => { selected = layer.id; store.rerender(); });
+        rect.addEventListener('click', () => selectLayer(layer.id));
         bandGroup.appendChild(rect);
         nodes.bands.set(layer.id, rect);
 
-        const annot = el('g', { class: 'annot' },
-            el('path', { class: 'leader' }),
-            el('text', {}, el('tspan', { class: 'annot-main' }), el('tspan', { class: 'annot-sub', dy: 13 })));
-        annotGroup.appendChild(annot);
-        nodes.annots.set(layer.id, annot);
-
-        // A draggable boundary at the TOP of every resizable band, with a
-        // visible pull-tab on the jar's left edge (fat touch target)
         if (['water', 'starter', 'flour'].includes(layer.kind)) {
             const isTopFlour = layer.kind === 'flour' && layer.flourIndex === layers.filter(l => l.kind === 'flour').length - 1;
             if (!isTopFlour) {
                 const tab = el('g', { class: 'handle-tab', 'data-tab': layer.id },
-                    el('rect', { class: 'tab-body', x: JAR.left - 42, y: -16, width: 34, height: 32, rx: 7 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 34, x2: JAR.left - 16, y1: -5, y2: -5 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 34, x2: JAR.left - 16, y1: 0, y2: 0 }),
-                    el('line', { class: 'tab-grip', x1: JAR.left - 34, x2: JAR.left - 16, y1: 5, y2: 5 }),
-                    // invisible halo for a ≥44px touch target
-                    el('rect', { x: JAR.left - 50, y: -24, width: 50, height: 48, fill: 'transparent' }));
+                    el('rect', { class: 'tab-body', x: JAR.left - 44, y: -16, width: 34, height: 32, rx: 7 }),
+                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: -5, y2: -5 }),
+                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: 0, y2: 0 }),
+                    el('line', { class: 'tab-grip', x1: JAR.left - 36, x2: JAR.left - 18, y1: 5, y2: 5 }),
+                    el('rect', { x: JAR.left - 52, y: -26, width: 52, height: 52, fill: 'transparent' }));
                 const g = el('g', { 'data-boundary': layer.id },
                     el('line', { class: 'boundary-line', x1: JAR.left, x2: JAR.right }),
-                    el('rect', { class: 'grab', x: JAR.left, width: JAR.right - JAR.left, height: 36 }));
+                    el('rect', { class: 'grab', x: JAR.left, width: w, height: 36 }));
                 attachDrag(g.querySelector('.grab'), layer.id);
                 attachDrag(tab, layer.id);
-                boundaryGroup.appendChild(g);
-                boundaryGroup.appendChild(tab);
+                boundaryGroup.append(g, tab);
                 nodes.boundaries.set(layer.id, g);
                 nodes.tabs.set(layer.id, tab);
             }
         }
     }
 
-    // Ruler (drawn only while dragging)
     nodes.ruler = el('g', { class: 'ruler' });
     svg.appendChild(nodes.ruler);
 
-    // Surface handle (total dough weight) — ring with grip on the right.
-    // All children use y=0; render() positions the group via transform.
     nodes.surface = el('g', { class: 'surface-handle handle-tab' },
         el('line', { x1: JAR.left - 6, x2: JAR.right + 6, y1: 0, y2: 0 }),
-        el('circle', { cx: JAR.right + 18, cy: 0, r: 13 }),
-        el('line', { class: 'tab-grip', x1: JAR.right + 12, x2: JAR.right + 24, y1: -4, y2: -4 }),
-        el('line', { class: 'tab-grip', x1: JAR.right + 12, x2: JAR.right + 24, y1: 4, y2: 4 }),
-        el('rect', { x: JAR.right - 2, y: -24, width: 60, height: 48, fill: 'transparent' }));
+        el('circle', { cx: JAR.right + 20, cy: 0, r: 13 }),
+        el('line', { class: 'tab-grip', x1: JAR.right + 14, x2: JAR.right + 26, y1: -4, y2: -4 }),
+        el('line', { class: 'tab-grip', x1: JAR.right + 14, x2: JAR.right + 26, y1: 4, y2: 4 }),
+        el('rect', { x: JAR.right, y: -26, width: 52, height: 52, fill: 'transparent' }));
     attachDrag(nodes.surface, '__surface__');
     svg.appendChild(nodes.surface);
 }
@@ -144,7 +126,7 @@ function svgY(clientY) {
     return (clientY - r.top) * (600 / r.height);
 }
 
-let activeRuler = null; // ticks built once per drag: [{ y, label, value }]
+let activeRuler = null;
 
 function attachDrag(target, boundaryId) {
     let raf = null;
@@ -174,13 +156,45 @@ function attachDrag(target, boundaryId) {
         nodes.ruler.innerHTML = '';
         target.classList?.remove('active');
         hud('');
-        // A grab zone can cover a thin band entirely — treat a tap
-        // (no movement) as selecting the band under the pointer.
         if (!moved && e.type === 'pointerup') selectBandAt(svgY(e.clientY));
         store.rerender();
     };
     target.addEventListener('pointerup', end);
     target.addEventListener('pointercancel', end);
+}
+
+function selectBandAt(y) {
+    const { state } = store.get();
+    const recipe = model.derive(state);
+    const layers = buildLayers(recipe);
+    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
+
+    let cum = 0;
+    const ranges = layers.map(layer => {
+        const y0 = scale.yOf(cum);
+        cum += layer.grams;
+        const y1 = scale.yOf(cum);
+        return { layer, top: y1, bottom: y0, height: y0 - y1 };
+    });
+
+    // Thin bands win when the tap lands close to them
+    let best = null;
+    for (const range of ranges) {
+        if (range.height < 20) {
+            const dist = Math.abs(y - (range.top + range.bottom) / 2);
+            if (dist < 9 && (!best || dist < best.dist)) best = { layer: range.layer, dist };
+        }
+    }
+    if (best) { selectLayer(best.layer.id); return; }
+    for (const range of ranges) {
+        if (y >= range.top && y <= range.bottom) { selectLayer(range.layer.id); return; }
+    }
+}
+
+function selectLayer(id) {
+    selected = id;
+    store.rerender();
+    chipRefs.get(id)?.card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 /* ---------- drag HUD + guide ruler ---------- */
@@ -192,7 +206,6 @@ function hud(text) {
     hudEl.classList.toggle('on', !!text);
 }
 
-/** Build guide ticks for this drag: meaningful values, fixed for the drag. */
 function startRuler(boundaryId, target) {
     target.classList?.add('active');
     const { state } = store.get();
@@ -204,7 +217,7 @@ function startRuler(boundaryId, target) {
     if (boundaryId === '__surface__') {
         const step = scale.capacity > 3000 ? 500 : 250;
         for (let g = step; g <= scale.capacity; g += step) {
-            ticks.push({ y: scale.yOf(g), label: `${g} g`, value: g });
+            ticks.push({ y: scale.yOf(g), label: `${g} g` });
         }
     } else {
         const idx = layers.findIndex(l => l.id === boundaryId);
@@ -213,15 +226,15 @@ function startRuler(boundaryId, target) {
         if (layer.kind === 'water') {
             for (let h = 55; h <= 100; h += 5) {
                 const grams = recipe.flourTotal * h / 100 - recipe.starterWater - recipe.liquidAddInWater;
-                if (grams >= 0) ticks.push({ y: scale.yOf(below + grams), label: `${h}%`, value: h });
+                if (grams >= 0) ticks.push({ y: scale.yOf(below + grams), label: `${h}%` });
             }
         } else if (layer.kind === 'starter') {
             for (let p = 5; p <= 45; p += 5) {
-                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%`, value: p });
+                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%` });
             }
         } else if (layer.kind === 'flour') {
             for (let p = 10; p <= 90; p += 10) {
-                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%`, value: p });
+                ticks.push({ y: scale.yOf(below + recipe.flourTotal * p / 100), label: `${p}%` });
             }
         }
     }
@@ -235,7 +248,6 @@ function startRuler(boundaryId, target) {
     }
 }
 
-/** Highlight the tick nearest the current drag position. */
 function updateRulerHot(y) {
     if (!activeRuler) return;
     let best = null;
@@ -246,38 +258,6 @@ function updateRulerHot(y) {
         const hot = tick === best && Math.abs(tick.y - y) < 14;
         tick.line.classList.toggle('hot', hot);
         tick.text.classList.toggle('hot', hot);
-    }
-}
-
-function selectBandAt(y) {
-    const { state } = store.get();
-    const recipe = model.derive(state);
-    const layers = buildLayers(recipe);
-    const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: true });
-
-    // Band pixel ranges, bottom→top
-    let cum = 0;
-    const ranges = layers.map(layer => {
-        const y0 = scale.yOf(cum);
-        cum += layer.grams;
-        const y1 = scale.yOf(cum);
-        return { layer, top: y1, bottom: y0, height: y0 - y1 };
-    });
-
-    // A thin band (salt seam, a 5% flour) is nearly impossible to hit
-    // exactly — if the tap lands within 9px of one, it wins.
-    let best = null;
-    for (const range of ranges) {
-        if (range.height < 20) {
-            const mid = (range.top + range.bottom) / 2;
-            const dist = Math.abs(y - mid);
-            if (dist < 9 && (!best || dist < best.dist)) best = { layer: range.layer, dist };
-        }
-    }
-    if (best) { selected = best.layer.id; return; }
-
-    for (const range of ranges) {
-        if (y >= range.top && y <= range.bottom) { selected = range.layer.id; return; }
     }
 }
 
@@ -292,14 +272,13 @@ function handleDrag(boundaryId, y) {
     updateRulerHot(y);
 
     if (boundaryId === '__surface__') {
-        const snapped = Math.round(gramsAtY / 25) * 25;   // snap dough weight to 25 g
+        const snapped = Math.round(gramsAtY / 25) * 25;
         store.apply(s => model.scaleToDoughWeight(s, snapped));
         const r2 = model.derive(store.get().state);
         hud(`${displayGrams(r2.doughWeight)} g of dough · ${displayGrams(r2.weightPerLoaf)} g per loaf`);
         return;
     }
 
-    // Cumulative grams below this band
     const idx = layers.findIndex(l => l.id === boundaryId);
     const below = layers.slice(0, idx).reduce((sum, l) => sum + l.grams, 0);
     const newGrams = Math.max(0, gramsAtY - below);
@@ -307,16 +286,15 @@ function handleDrag(boundaryId, y) {
 
     if (layer.kind === 'water') {
         const hyd = ((newGrams + recipe.starterWater + recipe.liquidAddInWater) / recipe.flourTotal) * 100;
-        store.apply(s => model.setHydration(s, Math.round(hyd * 2) / 2));   // snap 0.5%
+        store.apply(s => model.setHydration(s, Math.round(hyd * 2) / 2));
         const r2 = model.derive(store.get().state);
         hud(`${formatPct(r2.hydration)}% hydration · ${displayGrams(r2.waterToAdd)} g water`);
     } else if (layer.kind === 'starter') {
-        const snapped = Math.round(newGrams / 5) * 5;   // snap 5 g
+        const snapped = Math.round(newGrams / 5) * 5;
         store.apply(s => model.setStarterGrams(s, snapped));
         const r2 = model.derive(store.get().state);
         hud(`${displayGrams(r2.starterMass)} g starter · ${formatPct(r2.starterPct)}% of flour`);
     } else if (layer.kind === 'flour') {
-        // Redistribute between this band and the one above (pair drag)
         const i = layer.flourIndex;
         const flours = state.flours.map(f => ({ ...f }));
         if (i + 1 >= flours.length) return;
@@ -328,6 +306,246 @@ function handleDrag(boundaryId, y) {
         hud(`${formatPct(newPct)}% ${layer.label.toLowerCase()} · ${formatPct(pairPct - newPct)}% ${layers[idx + 1].label.toLowerCase()}`);
     }
 }
+
+/* ---------- ingredient chips (the real interface) ---------- */
+
+const chipRefs = new Map();   // layer id -> { card, grams, pct, update }
+let chipsSig = '';
+
+/** Slider row with -/+ steppers; safe against re-render while touched. */
+function mkSliderRow({ label, min, max, step, unit, get, apply }) {
+    const readout = el('span', { class: 'numeral chip-readout' }, '');
+    const slider = el('input', { type: 'range', min, max, step, value: get() });
+    let busy = false;
+    const setVal = v => {
+        const clamped = Math.min(max, Math.max(min, v));
+        slider.value = String(clamped);
+        readout.textContent = `${round1(clamped)}${unit}`;
+        store.apply(s => apply(s, clamped));
+    };
+    slider.addEventListener('input', () => setVal(Number(slider.value)));
+    slider.addEventListener('pointerdown', () => { busy = true; });
+    for (const evt of ['pointerup', 'pointercancel', 'change', 'blur']) {
+        slider.addEventListener(evt, () => { busy = false; store.rerender(); });
+    }
+    const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
+    const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
+    minus.addEventListener('click', e => { e.stopPropagation(); setVal(Number(slider.value) - step); });
+    plus.addEventListener('click', e => { e.stopPropagation(); setVal(Number(slider.value) + step); });
+    const row = el('div', {},
+        label ? el('span', { class: 'smallcaps chip-row-label' }, label) : null,
+        el('div', { class: 'popover-row' }, minus, slider, plus, readout));
+    return {
+        row,
+        update() {
+            if (!busy && document.activeElement !== slider) slider.value = String(get());
+            readout.textContent = `${round1(Number(slider.value))}${unit}`;
+        },
+    };
+}
+
+function buildChip(layer, state) {
+    const card = el('div', { class: 'chip-card', 'data-chip': layer.id });
+    card.style.setProperty('--chip-color', layer.color);
+
+    const grams = el('span', { class: 'numeral chip-grams' }, '');
+    const pct = el('span', { class: 'chip-pct caption' }, '');
+    const head = el('div', { class: 'chip-head' },
+        el('span', { class: 'chip-name' }, layer.label), grams, pct);
+    head.addEventListener('click', () => selectLayer(layer.id));
+    card.appendChild(head);
+
+    const editor = el('div', { class: 'chip-editor' });
+    card.appendChild(editor);
+    const note = el('p', { class: 'caption chip-note' }, '');
+    const parts = [];   // things to update in place
+
+    if (layer.kind === 'water') {
+        const row = mkSliderRow({
+            min: 40, max: 120, step: 0.5, unit: '%',
+            get: () => store.get().state.hydration,
+            apply: (s, v) => model.setHydration(s, v),
+        });
+        editor.appendChild(row.row);
+        parts.push(row);
+        parts.push({ update: r => { note.textContent = caption('hydration', r.hydration); } });
+    } else if (layer.kind === 'starter') {
+        const pctRow = mkSliderRow({
+            label: 'amount, % of flour', min: 5, max: 50, step: 1, unit: '%',
+            get: () => store.get().state.starter.pct,
+            apply: (s, v) => model.setStarterPercent(s, v),
+        });
+        const hydRow = mkSliderRow({
+            label: 'starter hydration', min: 50, max: 150, step: 5, unit: '%',
+            get: () => store.get().state.starter.hydration,
+            apply: (s, v) => model.setStarterHydration(s, v),
+        });
+        const styleChips = el('div', { class: 'popover-chips' });
+        for (const [val, label] of [[100, 'liquid'], [60, 'stiff']]) {
+            const chip = el('button', { class: 'chip', type: 'button', 'data-hyd': val }, label);
+            chip.addEventListener('click', e => {
+                e.stopPropagation();
+                store.apply(s => model.setStarterHydration(s, val));
+            });
+            styleChips.appendChild(chip);
+        }
+        editor.append(pctRow.row, styleChips, hydRow.row);
+        parts.push(pctRow, hydRow);
+        parts.push({ update: r => {
+            for (const chip of styleChips.children) {
+                chip.classList.toggle('active',
+                    (r.starterHydration >= 90) === (chip.dataset.hyd === '100'));
+            }
+            note.textContent = `${caption('starter', r.starterPct)}. Carries ${displayGrams(r.starterFlour)} g flour + ${displayGrams(r.starterWater)} g water.`;
+        } });
+    } else if (layer.kind === 'salt') {
+        const row = mkSliderRow({
+            min: 0, max: 3.5, step: 0.1, unit: '%',
+            get: () => store.get().state.saltPct,
+            apply: (s, v) => model.setSalt(s, v),
+        });
+        editor.appendChild(row.row);
+        parts.push(row);
+        parts.push({ update: r => {
+            const c = caption('salt', r.saltPct);
+            note.textContent = `${c[0].toUpperCase()}${c.slice(1)}. Percent of total flour, starter included.`;
+        } });
+    } else if (layer.kind === 'flour') {
+        const i = layer.flourIndex;
+        const row = mkSliderRow({
+            label: 'share of the flour', min: 2, max: 100, step: 1, unit: '%',
+            get: () => store.get().state.flours[i]?.pct ?? 0,
+            apply: (s, v) => {
+                const flours = s.flours.map((f, fi) => ({ key: f.key, pct: fi === i ? v : f.pct }));
+                return model.setFlourBlend(s, flours);
+            },
+        });
+        const typeSelect = el('select', { 'aria-label': 'Flour type' });
+        for (const [key, def] of Object.entries(model.FLOUR_TYPES)) {
+            typeSelect.appendChild(el('option', { value: key }, def.label));
+        }
+        typeSelect.value = layer.flourKey;
+        typeSelect.addEventListener('click', e => e.stopPropagation());
+        typeSelect.addEventListener('change', () => {
+            store.apply(s => model.setFlourBlend(s,
+                s.flours.map((f, fi) => ({ key: fi === i ? typeSelect.value : f.key, pct: f.pct }))));
+        });
+        const removeBtn = el('button', { class: 'chip danger-chip', type: 'button' }, 'remove');
+        removeBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            selected = 'water';
+            store.apply(s => model.setFlourBlend(s, s.flours.filter((_, fi) => fi !== i)));
+        });
+        editor.append(row.row, el('div', { class: 'chip-tools' }, typeSelect, removeBtn));
+        parts.push(row);
+        parts.push({ update: (r, s) => {
+            removeBtn.disabled = s.flours.length <= 1;
+            note.textContent = model.FLOUR_TYPES[s.flours[i]?.key]?.wholeGrain
+                ? 'A whole grain: drinks more water, ferments faster.'
+                : 'A white flour: structure, lift, open crumb.';
+        } });
+    }
+
+    editor.appendChild(note);
+
+    return {
+        card,
+        update(recipe, state2, layer2) {
+            grams.textContent = `${displayGrams(layer2.grams)} g`;
+            pct.textContent = chipPct(layer2, recipe);
+            for (const part of parts) part.update(recipe, state2);
+        },
+    };
+}
+
+function chipPct(layer, recipe) {
+    switch (layer.kind) {
+        case 'water': return `${formatPct(recipe.hydration)}% hydration`;
+        case 'starter': return `${formatPct(recipe.starterPct)}% of flour`;
+        case 'salt': return `${formatPct(recipe.saltPct)}%`;
+        case 'flour': return `${formatPct(recipe.flourBreakdown[layer.flourIndex]?.pct ?? 0)}% of flour`;
+        default: return '';
+    }
+}
+
+function renderChips(recipe, state) {
+    const layers = buildLayers(recipe);
+    // Chips read top of jar first: reverse so water sits last, like the pour
+    const ordered = [...layers].reverse();
+    const sig = ordered.map(l => `${l.id}:${l.kind === 'flour' ? l.flourKey : ''}`).join('|');
+
+    if (sig !== chipsSig) {
+        chipsSig = sig;
+        chipRefs.clear();
+        const container = $('chips');
+        container.innerHTML = '';
+        for (const layer of ordered) {
+            const chip = buildChip(layer, state);
+            chipRefs.set(layer.id, chip);
+            container.appendChild(chip.card);
+        }
+        const addBtn = el('button', { class: 'chip add-flour', type: 'button' }, '+ add a flour');
+        addBtn.addEventListener('click', () => {
+            const used = new Set(store.get().state.flours.map(f => f.key));
+            const nextKey = Object.keys(model.FLOUR_TYPES).find(k => !used.has(k)) || 'bread';
+            store.apply(s => model.setFlourBlend(s, [
+                ...s.flours.map(f => ({ key: f.key, pct: f.pct * 0.9 })),
+                { key: nextKey, pct: 10 },
+            ]));
+        });
+        container.appendChild(addBtn);
+    }
+
+    for (const layer of ordered) {
+        const chip = chipRefs.get(layer.id);
+        chip.card.classList.toggle('selected', selected === layer.id);
+        chip.update(recipe, state, layer);
+    }
+}
+
+/* ---------- batch bar ---------- */
+
+let batchRefs = null;
+
+function renderBatch(recipe, state) {
+    if (!batchRefs) {
+        const bar = $('batch-bar');
+        const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
+        const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
+        minus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves - 1)));
+        plus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves + 1)));
+        batchRefs = {
+            weight: el('span', { class: 'numeral batch-weight' }, ''),
+            loaves: el('span', {}, ''),
+            perLoaf: el('span', { class: 'caption' }, ''),
+            stats: el('span', { class: 'caption batch-stats' }, ''),
+        };
+        bar.append(
+            batchRefs.weight, el('span', { class: 'caption' }, 'of dough'),
+            el('span', { class: 'batch-sep' }, '·'),
+            minus, batchRefs.loaves, plus,
+            batchRefs.perLoaf,
+            batchRefs.stats);
+    }
+    batchRefs.weight.textContent = `${displayGrams(recipe.doughWeight)} g`;
+    batchRefs.loaves.textContent = `${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`;
+    batchRefs.perLoaf.textContent = `${displayGrams(recipe.weightPerLoaf)} g each, ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked`;
+    batchRefs.stats.textContent = `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented`;
+}
+
+/* ---------- presets ---------- */
+
+const presetSelect = $('preset-select');
+for (const preset of PRESETS) {
+    presetSelect.appendChild(el('option', { value: preset.id }, preset.name));
+}
+presetSelect.addEventListener('change', () => {
+    const preset = getPreset(presetSelect.value);
+    if (!preset) return;
+    selected = 'water';
+    prevCapacity = null;
+    store.apply(() => model.sanitizeState(preset.state));
+});
 
 /* ---------- render ---------- */
 
@@ -344,14 +562,11 @@ function render(state) {
     const scale = makeJarScale(recipe.doughWeight, { jarTopY: JAR.top, jarBottomY: JAR.bottom, prevCapacity, freeze: dragging });
     prevCapacity = scale.capacity;
 
-    // Bands + boundaries
     let cum = 0;
-    const annotSlots = [];
     for (const layer of layers) {
         const y0 = scale.yOf(cum);
         cum += layer.grams;
         let y1 = scale.yOf(cum);
-        // Salt seam stays visible
         if (layer.kind === 'salt' && y0 - y1 < 4) y1 = y0 - 4;
         const rect = nodes.bands.get(layer.id);
         rect.setAttribute('y', y1);
@@ -366,175 +581,12 @@ function render(state) {
             boundary.querySelector('.grab').setAttribute('y', y1 - 18);
             nodes.tabs.get(layer.id)?.setAttribute('transform', `translate(0, ${y1})`);
         }
-
-        annotSlots.push({ layer, mid: (y0 + y1) / 2 });
     }
 
-    // Surface handle at the top of the stack
-    const surfaceY = scale.yOf(cum);
-    nodes.surface.setAttribute('transform', `translate(0, ${surfaceY})`);
+    nodes.surface.setAttribute('transform', `translate(0, ${scale.yOf(cum)})`);
 
-    // Annotations with top-down collision pass (≥26px separation)
-    annotSlots.sort((a, b) => a.mid - b.mid);
-    let lastY = -Infinity;
-    for (const slot of annotSlots) {
-        const yText = Math.max(slot.mid, lastY + 32);
-        lastY = yText;
-        const g = nodes.annots.get(slot.layer.id);
-        const text = g.querySelector('text');
-        text.setAttribute('x', ANNOT_X + 12);
-        text.setAttribute('y', yText + 4);
-        const main = g.querySelector('.annot-main');
-        const sub = g.querySelector('.annot-sub');
-        main.textContent = `${displayGrams(slot.layer.grams)} g`;
-        sub.setAttribute('x', ANNOT_X + 12);
-        sub.textContent = pctLine(slot.layer, recipe);
-        g.querySelector('.leader').setAttribute('d',
-            `M ${JAR.right + (slot.layer.kind ? 4 : 0)} ${slot.mid} H ${ANNOT_X} ${yText !== slot.mid ? `L ${ANNOT_X + 8} ${yText}` : ''}`);
-    }
-
-    renderDetail(recipe, state);
-}
-
-function pctLine(layer, recipe) {
-    switch (layer.kind) {
-        case 'water': return `${layer.label} · ${formatPct(recipe.hydration)}% hydration`;
-        case 'starter': return `${layer.label} · ${formatPct(recipe.starterPct)}% of flour`;
-        case 'salt': return `${layer.label} · ${formatPct(recipe.saltPct)}%`;
-        case 'flour': return `${layer.label} · ${formatPct(recipe.flourBreakdown[layer.flourIndex].pct)}%`;
-        default: return layer.label;
-    }
-}
-
-/* ---------- detail panel ---------- */
-
-const DETAIL = {
-    water: {
-        title: 'Water',
-        grams: r => `${displayGrams(r.waterToAdd)} g to add · ${displayGrams(r.totalWater)} g true total`,
-        caption: r => `Hydration is the biggest single lever on crumb. Right now: ${caption('hydration', r.hydration)}.`,
-        control: (r, s) => ({ label: 'Hydration', value: s.hydration, min: 40, max: 120, step: 0.5, unit: '%', apply: v => model.setHydration(s, v) }),
-    },
-    starter: {
-        title: 'Starter',
-        grams: r => `${displayGrams(r.starterMass)} g · carries ${displayGrams(r.starterFlour)} g flour + ${displayGrams(r.starterWater)} g water`,
-        caption: r => `Inoculation sets the tempo. Right now: ${caption('starter', r.starterPct)}.`,
-        control: (r, s) => ({ label: 'Starter, % of flour', value: s.starter.pct, min: 5, max: 40, step: 1, unit: '%', apply: v => model.setStarterPercent(s, v) }),
-    },
-    salt: {
-        title: 'Salt',
-        grams: r => `${displayGrams(r.salt)} g`,
-        caption: r => `${caption('salt', r.saltPct)[0].toUpperCase()}${caption('salt', r.saltPct).slice(1)}. Measured against total flour, starter included.`,
-        control: (r, s) => ({ label: 'Salt, % of flour', value: s.saltPct, min: 0, max: 3.5, step: 0.1, unit: '%', apply: v => model.setSalt(s, v) }),
-    },
-};
-
-function detailDef(recipe) {
-    const flourMatch = /^flour-(\d+)$/.exec(selected);
-    if (flourMatch) {
-        const i = Number(flourMatch[1]);
-        if (recipe.flourBreakdown[i]) {
-            // Look flour data up per-call so in-place updates never go stale
-            const f = r => r.flourBreakdown[i];
-            return {
-                title: r => model.FLOUR_TYPES[f(r).key]?.label || f(r).key,
-                grams: r => `${displayGrams(f(r).added)} g to add (${displayGrams(f(r).total)} g of the total flour)`,
-                caption: r => (model.FLOUR_TYPES[f(r).key]?.wholeGrain
-                    ? 'A whole grain — it drinks more water and ferments faster. Adjust below, or drag this band’s lower handle.'
-                    : 'A white flour — structure, lift, and an open crumb. Adjust below, or drag this band’s lower handle.'),
-                control: (r, s) => ({
-                    label: 'share', value: f(r).pct, min: 2, max: 100, step: 1, unit: '%',
-                    apply: v => {
-                        const flours = s.flours.map((fl, fi) => ({ key: fl.key, pct: fi === i ? v : fl.pct }));
-                        return model.setFlourBlend(s, flours);
-                    },
-                }),
-            };
-        }
-    }
-    const d = DETAIL[selected] || DETAIL.water;
-    return { ...d, title: () => d.title };
-}
-
-// The panel is built once per selection and then updated IN PLACE — the
-// slider must never be rebuilt mid-drag (that's what made phones stutter).
-let detailKey = '';
-let detailRefs = null;
-
-function renderDetail(recipe, state) {
-    const key = `${selected}|${state.flours.length}`;
-    const def = detailDef(recipe);
-
-    if (key !== detailKey || !detailRefs) {
-        detailKey = key;
-        buildDetail(def, recipe, state);
-    }
-    updateDetail(def, recipe, state);
-}
-
-function buildDetail(def, recipe, state) {
-    const panel = $('detail');
-    panel.innerHTML = '';
-    const r = (detailRefs = { sliderBusy: false });
-
-    r.title = el('h3', {}, '');
-    r.grams = el('div', { class: 'grams-line' }, '');
-    r.caption = el('span', { class: 'caption' }, '');
-    panel.append(r.title, r.grams, r.caption);
-
-    const c = def.control(recipe, state);
-    r.readout = el('span', { class: 'numeral' }, '');
-    r.slider = el('input', { type: 'range', min: c.min, max: c.max, step: c.step, value: c.value });
-    const setVal = v => {
-        const clamped = Math.min(c.max, Math.max(c.min, v));
-        r.slider.value = String(clamped);
-        r.readout.textContent = `${round1(clamped)}${c.unit}`;
-        store.apply(s => detailDef(model.derive(s)).control(model.derive(s), s).apply(clamped));
-    };
-    r.slider.addEventListener('input', () => setVal(Number(r.slider.value)));
-    // While a finger is on the slider, render must not write to it
-    r.slider.addEventListener('pointerdown', () => { r.sliderBusy = true; });
-    for (const evt of ['pointerup', 'pointercancel', 'change', 'blur']) {
-        r.slider.addEventListener(evt, () => { r.sliderBusy = false; store.rerender(); });
-    }
-    const minusBtn = el('button', { class: 'popover-step', type: 'button' }, '−');
-    const plusBtn = el('button', { class: 'popover-step', type: 'button' }, '+');
-    minusBtn.addEventListener('click', () => setVal(Number(r.slider.value) - c.step));
-    plusBtn.addEventListener('click', () => setVal(Number(r.slider.value) + c.step));
-    panel.appendChild(el('div', { class: 'popover-row' }, minusBtn, r.slider, plusBtn, r.readout));
-
-    // Batch controls (always present)
-    const minus = el('button', { class: 'popover-step', type: 'button' }, '−');
-    const plus = el('button', { class: 'popover-step', type: 'button' }, '+');
-    minus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves - 1)));
-    plus.addEventListener('click', () => store.apply(s => model.setNumLoaves(s, s.numLoaves + 1)));
-    r.batchWeight = el('span', { class: 'numeral' }, '');
-    r.loaves = el('span', {}, '');
-    r.perLoaf = el('span', { class: 'caption' }, '');
-    panel.appendChild(el('div', { class: 'batch' },
-        r.batchWeight, el('span', { class: 'caption' }, 'of dough ·'),
-        minus, r.loaves, plus, r.perLoaf));
-
-    r.footnote = el('p', { class: 'footnote' }, '');
-    panel.appendChild(r.footnote);
-}
-
-function updateDetail(def, recipe, state) {
-    const r = detailRefs;
-    r.title.textContent = def.title(recipe);
-    r.grams.textContent = def.grams(recipe);
-    r.caption.textContent = def.caption(recipe);
-
-    const c = def.control(recipe, state);
-    if (!r.sliderBusy && document.activeElement !== r.slider) {
-        r.slider.value = String(c.value);
-    }
-    r.readout.textContent = `${round1(Number(r.slider.value))}${c.unit}`;
-
-    r.batchWeight.textContent = `${displayGrams(recipe.doughWeight)} g`;
-    r.loaves.textContent = `${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`;
-    r.perLoaf.textContent = `${displayGrams(recipe.weightPerLoaf)} g each`;
-    r.footnote.textContent = `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented flour · salt ${formatPct(recipe.saltPct)}%`;
+    renderChips(recipe, state);
+    renderBatch(recipe, state);
 }
 
 /* ---------- boot ---------- */

@@ -1,5 +1,5 @@
 /**
- * control.js — Concept Ⅲ: Mission Control.
+ * control.js - Concept Ⅲ: Mission Control.
  * The bake as a horizontal ribbon of time. Drag the paper to move the
  * start; drag the bake block to plan backward from a ready time; pull the
  * cold-rest edge to stretch it; warm the kitchen and watch bulk shrink.
@@ -89,7 +89,7 @@ function render(state, env) {
         }, dayFmt.format(boundary.date)));
     }
 
-    // Step blocks — labels alternate rows and skip when a row is crowded
+    // Step blocks - labels alternate rows and skip when a row is crowded
     let flip = false;
     const rowEnd = { above: -Infinity, below: -Infinity };
     for (const step of sched) {
@@ -152,7 +152,7 @@ function render(state, env) {
         }
         svg.appendChild(g);
 
-        // Retard stretch grip — visible handle ring, wide hit area
+        // Retard stretch grip - visible handle ring, wide hit area
         if (step.id === 'retard') {
             const gy = BAND.top + BAND.height / 2;
             const grip = el('g', { class: 'retard-grip', 'data-drag': 'retard' },
@@ -186,8 +186,8 @@ function renderHeader(state, env, sched) {
     $('temp-caption').textContent = `At ${round1(env.roomTemp)} °C, bulk runs ≈ ${formatDuration(bulk)}.`;
     const last = sched[sched.length - 1];
     $('mode-note').textContent = env.mode === 'ready'
-        ? `Planning backward — bread ready ${dayLong.format(last.end)}, ${timeFmt.format(last.end)}.`
-        : `Planning forward — starting ${dayLong.format(sched[0].start)}, ${timeFmt.format(sched[0].start)}.`;
+        ? `Planning backward - bread ready ${dayLong.format(last.end)}, ${timeFmt.format(last.end)}.`
+        : `Planning forward - starting ${dayLong.format(sched[0].start)}, ${timeFmt.format(sched[0].start)}.`;
 }
 
 /* ---------- drawer ---------- */
@@ -214,7 +214,7 @@ function renderDrawer(state, env) {
             }),
         },
         {
-            label: 'starter — sets the tempo', text: `${formatPct(recipe.starterPct)}%`,
+            label: 'starter - sets the tempo', text: `${formatPct(recipe.starterPct)}%`,
             spec: () => ({
                 kind: 'number', label: 'Starter, % of flour', value: state.starter.pct, min: 5, max: 40, step: 1, unit: '%',
                 onInput: v => store.apply(s => model.setStarterPercent(s, v)),
@@ -261,7 +261,7 @@ function renderStepList(sched) {
         }
         container.appendChild(el('p', { class: 'sched-line' },
             el('span', { class: 'sched-time' }, timeFmt.format(step.start)),
-            el('strong', {}, step.label), ' — ', step.description));
+            el('strong', {}, step.label), ' - ', step.description));
     }
 }
 
@@ -334,7 +334,7 @@ const endDrag = e => {
     const finished = drag;
     drag = null;
     hud('');
-    // Tap (no movement) = open an editor instead — the mobile-friendly path
+    // Tap (no movement) = open an editor instead - the mobile-friendly path
     if (finished && !finished.moved && e.type === 'pointerup') {
         if (finished.kind === 'bake') {
             popover.open(finished.target, {

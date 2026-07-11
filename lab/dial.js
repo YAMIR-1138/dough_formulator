@@ -1,5 +1,5 @@
 /**
- * dial.js — Concept Ⅳ: Pocket Dial.
+ * dial.js - Concept Ⅳ: Pocket Dial.
  * One decision per screen, each with a big rotary dial. CSS scroll-snap
  * does the swiping; dials use relative angle deltas so grabbing anywhere
  * never teleports the value. Ends on a keep-on-screen bake card.
@@ -64,7 +64,7 @@ function makeDial({ min, max, step, format, unit, onChange }) {
     svg.append(valueText, unitText);
 
     let value = min;        // committed, snapped to step
-    let floatValue = min;   // smooth visual value — follows the finger 1:1
+    let floatValue = min;   // smooth visual value - follows the finger 1:1
 
     function paint(v) {
         const deg = angleOf(min, max, v);
@@ -148,7 +148,7 @@ function mkStepper(getText, onMinus, onPlus) {
     return { row: el('div', { class: 'secondary' }, minus, label, plus), label, update: () => { label.textContent = getText(); } };
 }
 
-/* 1 — Batch */
+/* 1 - Batch */
 addScreen({
     id: 'batch', ask: 'How much bread?',
     build(section) {
@@ -170,12 +170,12 @@ addScreen({
         updaters.push((state, env, recipe) => {
             if (!dial.dragging) dial.set(Math.round(recipe.doughWeight));
             stepper.update();
-            wisdom.textContent = `${batchCaption(state.numLoaves, recipe.weightPerLoaf)} — ${displayGrams(recipe.weightPerLoaf)} g each, ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked.`;
+            wisdom.textContent = `${batchCaption(state.numLoaves, recipe.weightPerLoaf)} - ${displayGrams(recipe.weightPerLoaf)} g each, ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked.`;
         });
     },
 });
 
-/* 2 — Hydration */
+/* 2 - Hydration */
 addScreen({
     id: 'hydration', ask: 'How wet?',
     build(section) {
@@ -194,7 +194,7 @@ addScreen({
     },
 });
 
-/* 3 — Starter */
+/* 3 - Starter */
 addScreen({
     id: 'starter', ask: 'How much starter?',
     build(section) {
@@ -218,12 +218,12 @@ addScreen({
                 chip.classList.toggle('active',
                     (state.starter.hydration >= 90) === (chip.dataset.hyd === '100'));
             }
-            wisdom.textContent = `${caption('starter', recipe.starterPct)} — ${displayGrams(recipe.starterMass)} g of starter.`;
+            wisdom.textContent = `${caption('starter', recipe.starterPct)} - ${displayGrams(recipe.starterMass)} g of starter.`;
         });
     },
 });
 
-/* 4 — Grain */
+/* 4 - Grain */
 const GRAIN_KEYS = ['wholeWheat', 'rye', 'spelt'];
 let grainKey = 'wholeWheat';
 
@@ -262,7 +262,7 @@ addScreen({
     },
 });
 
-/* 5 — Schedule */
+/* 5 - Schedule */
 addScreen({
     id: 'schedule', ask: 'Ready when?',
     build(section) {
@@ -305,7 +305,7 @@ addScreen({
     },
 });
 
-/* 6 — Bake card */
+/* 6 - Bake card */
 addScreen({
     id: 'card', ask: 'Your bake card',
     build(section) {
@@ -359,7 +359,7 @@ addScreen({
             nextBlock.appendChild(el('span', { class: 'smallcaps' }, now < sched[0].start ? 'first up' : 'now / next'));
             nextBlock.appendChild(el('p', { class: 'sched-line' },
                 el('span', { class: 'sched-time' }, `${dayFmt.format(next.start)} ${timeFmt.format(next.start)}`),
-                el('strong', {}, next.label), ' — ', next.description));
+                el('strong', {}, next.label), ' - ', next.description));
             for (const step of after) {
                 nextBlock.appendChild(el('p', { class: 'sched-line after' },
                     el('span', { class: 'sched-time' }, timeFmt.format(step.start)), step.label));

@@ -1,5 +1,5 @@
 /**
- * format.js — rounding, number formatting, and sum reconciliation.
+ * format.js - rounding, number formatting, and sum reconciliation.
  * Pure module: no DOM, no state. All model math stays in full floats;
  * rounding happens here, at display time only.
  */
@@ -9,7 +9,7 @@ export function roundG(x) {
     return Math.round(x);
 }
 
-/** Round to 0.1 g — used for salt and other small amounts. */
+/** Round to 0.1 g - used for salt and other small amounts. */
 export function round1(x) {
     return Math.round(x * 10) / 10;
 }

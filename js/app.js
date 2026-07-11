@@ -1,5 +1,5 @@
 /**
- * app.js — bootstrap and event wiring. Owns the canonical state and calls
+ * app.js - bootstrap and event wiring. Owns the canonical state and calls
  * the pure modules; ui.js does the drawing.
  */
 import * as model from './model.js';
@@ -181,7 +181,7 @@ async function copyText(text, successMsg) {
         await navigator.clipboard.writeText(text);
         ui.toast(successMsg);
     } catch {
-        ui.toast('Clipboard unavailable — copy from the address bar instead');
+        ui.toast('Clipboard unavailable - copy from the address bar instead');
     }
 }
 
@@ -220,7 +220,7 @@ function initPresets() {
         if (!preset) return;
         state = model.sanitizeState(preset.state);
         renderAll();
-        ui.toast(`${preset.name} — ${preset.note}`);
+        ui.toast(`${preset.name} - ${preset.note}`);
     });
 }
 

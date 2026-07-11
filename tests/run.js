@@ -1,5 +1,5 @@
 /**
- * run.js — test runner for both Node (`node tests/run.js`) and the browser
+ * run.js - test runner for both Node (`node tests/run.js`) and the browser
  * (imported by tests.html). Imports every test file, runs, reports.
  */
 import { run } from './assert.js';
@@ -22,7 +22,7 @@ if (typeof document !== 'undefined') {
 } else {
     // Node: print and set exit code
     for (const r of summary.results) {
-        console.log(`${r.ok ? '  ok ' : 'FAIL '} ${r.name}${r.error ? ` — ${r.error}` : ''}`);
+        console.log(`${r.ok ? '  ok ' : 'FAIL '} ${r.name}${r.error ? ` - ${r.error}` : ''}`);
     }
     console.log(`\n${summary.passed} passed, ${summary.failed} failed`);
     if (summary.failed > 0) process.exitCode = 1;

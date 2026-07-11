@@ -1,5 +1,5 @@
 /**
- * lab-common.js — shared runtime for THE LAB pages: state hand-off through
+ * lab-common.js - shared runtime for THE LAB pages: state hand-off through
  * the URL hash, the tiny store, the concept switcher, and the shared
  * popover editor.
  */

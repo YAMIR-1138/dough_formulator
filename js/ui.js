@@ -1,5 +1,5 @@
 /**
- * ui.js — DOM rendering. Pure "state in, pixels out": app.js owns the state
+ * ui.js - DOM rendering. Pure "state in, pixels out": app.js owns the state
  * and event wiring; this module only knows how to draw it.
  */
 import { FLOUR_TYPES } from './model.js';
@@ -51,12 +51,12 @@ export function renderFormula(recipe, state, uiState) {
     setInput($('pff'), round1(recipe.prefermentedFlourPct));
     setText($('out-pff-note'), `= ${displayGrams(recipe.starterFlour)}g fermented flour`);
     setInput($('reserved-water'), round1(recipe.reservedWaterPct));
-    setText($('out-reserved'), recipe.reservedWater > 0 ? `${displayGrams(recipe.reservedWater)}g held back` : '—');
+    setText($('out-reserved'), recipe.reservedWater > 0 ? `${displayGrams(recipe.reservedWater)}g held back` : '-');
 
     $('pin-flour').checked = state.pinFlour;
     $('dough-caption').textContent = state.pinFlour
-        ? 'Flour is pinned — editing dough weight changes hydration instead.'
-        : 'Editing dough weight rescales the whole recipe — all percentages stay put.';
+        ? 'Flour is pinned - editing dough weight changes hydration instead.'
+        : 'Editing dough weight rescales the whole recipe - all percentages stay put.';
 
     // Starter input + its alternate reading
     const starterOfDough = (recipe.starterMass / recipe.doughWeight) * 100;
@@ -76,10 +76,10 @@ export function renderFormula(recipe, state, uiState) {
 
     renderMixPanel(recipe);
     renderStats(recipe);
-    setText($('blend-note'), `Whole grain: ${formatPct(recipe.wholeGrainPct)}% — feeds the fermentation model below.`);
+    setText($('blend-note'), `Whole grain: ${formatPct(recipe.wholeGrainPct)}% - feeds the fermentation model below.`);
 }
 
-/** The "on the scale" panel — displayed lines always sum to the total. */
+/** The "on the scale" panel - displayed lines always sum to the total. */
 function renderMixPanel(recipe) {
     const lines = [
         { key: 'flour', value: recipe.flourToAdd },
@@ -104,7 +104,7 @@ function renderMixPanel(recipe) {
         : '';
 
     const addInRows = recipe.addIns.map((a, i) =>
-        `<tr><td>${escapeHtml(a.name) || 'Add-in'}${a.liquid ? ' (liquid — counted as water)' : ''}</td><td data-mix="addin${i}"></td></tr>`
+        `<tr><td>${escapeHtml(a.name) || 'Add-in'}${a.liquid ? ' (liquid - counted as water)' : ''}</td><td data-mix="addin${i}"></td></tr>`
     ).join('');
 
     $('mix-body').innerHTML = `
@@ -231,7 +231,7 @@ export function renderAddInRows(state, recipe, { onChange, onRemove }) {
         grams.type = 'number';
         grams.min = '0';
         grams.step = '5';
-        grams.title = 'Grams — converts to % of flour';
+        grams.title = 'Grams - converts to % of flour';
         grams.value = String(displayGrams(recipe.flourTotal * addIn.pct / 100));
         grams.addEventListener('change', () =>
             onChange(index, { ...addIn, pct: (Number(grams.value) || 0) / recipe.flourTotal * 100 }));

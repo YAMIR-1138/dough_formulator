@@ -1,5 +1,5 @@
 /**
- * recipe.js — Concept Ⅰ: The Living Recipe.
+ * recipe.js - Concept Ⅰ: The Living Recipe.
  * The formula is a prose document; every underlined token is a button that
  * opens the shared popover. Renders are keyed and in-place (textContent
  * only), so the document rewrites live under an open popover.
@@ -180,7 +180,7 @@ const FLOUR_LABELS = Object.fromEntries(
 
 const updateLoaf = compile($('p-loaf'), [
     'I’m baking ', { token: 'loaves' }, ' of about ', { token: 'loafWeight' },
-    { dyn: (r, s) => (s.numLoaves === 1 ? ' — ' : ' each — ') },
+    { dyn: (r, s) => (s.numLoaves === 1 ? ' - ' : ' each - ') },
     { token: 'hydration' }, ' hydration, ', { token: 'starterPct' },
     ' ', { token: 'starterStyle' }, ' starter, ', { token: 'saltPct' },
     ' salt. I start ', { token: 'startTime' }, ' and the bread is ready ',
@@ -192,7 +192,7 @@ const updateFlour = compile($('p-flour'), [
     { dyn: r => r.flourBreakdown
         .map(f => `${formatPct(f.pct)}% ${FLOUR_LABELS[f.key] || f.key}`)
         .join(r.flourBreakdown.length > 2 ? ', ' : ' and ') },
-    { dyn: r => (r.wholeGrainPct > 0 ? ` — ${formatPct(r.wholeGrainPct)}% whole grain, which ferments a touch faster.` : '.') },
+    { dyn: r => (r.wholeGrainPct > 0 ? ` - ${formatPct(r.wholeGrainPct)}% whole grain, which ferments a touch faster.` : '.') },
 ]);
 
 const updateConditions = compile($('p-conditions'), [
@@ -215,7 +215,7 @@ const updateIngredients = compile($('p-ingredients'), [
             ? ` (${r.flourBreakdown.map(f => `${displayGrams(f.added)} g ${FLOUR_LABELS[f.key] || f.key}`).join(', ')})`
             : '';
         return `That comes to ${get('flour')} g of flour${blend}, ${get('water')} g of water, `
-            + `${get('starter')} g of ripe starter, and ${get('salt')} g of salt — ${total} g of dough. `
+            + `${get('starter')} g of ripe starter, and ${get('salt')} g of salt - ${total} g of dough. `
             + `The starter carries ${displayGrams(r.starterFlour)} g of that flour and ${displayGrams(r.starterWater)} g of the water, `
             + `so true hydration stays ${formatPct(r.hydration)}% (${formatPct(r.prefermentedFlourPct)}% of the flour is prefermented).`;
     } },
@@ -223,7 +223,7 @@ const updateIngredients = compile($('p-ingredients'), [
 
 const updatePerLoaf = compile($('p-perloaf'), [
     { dyn: (r, s) => (s.numLoaves > 1
-        ? `Divided into ${numberWord(s.numLoaves)}, that’s ${displayGrams(r.weightPerLoaf)} g per loaf — each baking off to roughly ${displayGrams(r.bakedWeightPerLoaf)} g.`
+        ? `Divided into ${numberWord(s.numLoaves)}, that’s ${displayGrams(r.weightPerLoaf)} g per loaf - each baking off to roughly ${displayGrams(r.bakedWeightPerLoaf)} g.`
         : `One loaf, baking off to roughly ${displayGrams(r.bakedWeightPerLoaf)} g.`) },
 ]);
 
@@ -251,7 +251,7 @@ function renderSchedule(sched) {
             for (const step of group.steps) {
                 container.appendChild(el('p', { class: 'sched-line' },
                     el('span', { class: 'sched-time' }, ''),
-                    el('strong', {}, ''), ' — ',
+                    el('strong', {}, ''), ' - ',
                     el('span', {}, '')));
             }
         }

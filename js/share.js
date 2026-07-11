@@ -1,5 +1,5 @@
 /**
- * share.js — encode/decode recipe state in the URL hash for backend-free
+ * share.js - encode/decode recipe state in the URL hash for backend-free
  * sharing. Format: #r=<base64url(JSON {v, s: state, e: env})>.
  */
 import { sanitizeState } from './model.js';
@@ -18,7 +18,7 @@ function base64urlDecode(str) {
 
 /**
  * Encode state + timeline env into a hash string ("#r=...").
- * env: { roomTemp, retardHours, mode } — only these are shared.
+ * env: { roomTemp, retardHours, mode } - only these are shared.
  */
 export function encodeState(state, env = {}) {
     const payload = {
@@ -46,7 +46,7 @@ export function encodeState(state, env = {}) {
 
 /**
  * Decode a location.hash. Returns { state, env } with a fully-sanitized
- * state, or null for anything malformed — never throws.
+ * state, or null for anything malformed - never throws.
  */
 export function decodeHash(hash) {
     try {

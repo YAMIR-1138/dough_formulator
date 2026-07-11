@@ -1,5 +1,5 @@
 /**
- * presets.js — built-in classic formulas. Pure data: each preset is a
+ * presets.js - built-in classic formulas. Pure data: each preset is a
  * canonical model State (flourTotal 1000 so the ratios read cleanly) plus
  * a note. Users rescale via dough weight or flour.
  */
@@ -63,7 +63,7 @@ export const PRESETS = [
     {
         id: 'rye40',
         name: '40% Rye',
-        note: 'Sticky, fragrant, ferments fast — watch the bulk, not the clock.',
+        note: 'Sticky, fragrant, ferments fast - watch the bulk, not the clock.',
         state: {
             v: 1, flourTotal: 1000, hydration: 85, saltPct: 2,
             starter: { pct: 25, hydration: 100 },

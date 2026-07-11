@@ -106,6 +106,17 @@ function render(state, env) {
             fill: colorFor(step.id),
             stroke: isBake ? 'var(--ink)' : 'none', 'stroke-width': isBake ? 1 : 0,
         }));
+        if (isBake) {
+            // Grip dots + an inflated invisible hit area for fat fingers
+            const gx = x0 + w / 2, gy = BAND.top + BAND.height / 2;
+            for (const dy of [-8, 0, 8]) {
+                g.appendChild(el('circle', { class: 'grip-dot', cx: gx, cy: gy + dy, r: 2 }));
+            }
+            g.appendChild(el('rect', {
+                x: x0 - Math.max(0, (44 - w) / 2), y: BAND.top - 10,
+                width: Math.max(44, w), height: BAND.height + 20, fill: 'transparent',
+            }));
+        }
 
         const seg = scale.segments.find(s => s.id === step.id);
         if (seg?.compressed) {
@@ -141,11 +152,15 @@ function render(state, env) {
         }
         svg.appendChild(g);
 
-        // Retard stretch grip
+        // Retard stretch grip — visible handle ring, wide hit area
         if (step.id === 'retard') {
+            const gy = BAND.top + BAND.height / 2;
             const grip = el('g', { class: 'retard-grip', 'data-drag': 'retard' },
-                el('line', { x1, x2: x1, y1: BAND.top + 6, y2: BAND.top + BAND.height - 6 }),
-                el('rect', { x: x1 - 10, y: BAND.top, width: 20, height: BAND.height, fill: 'transparent' }));
+                el('line', { x1, x2: x1, y1: BAND.top + 4, y2: BAND.top + BAND.height - 4 }),
+                el('circle', { cx: x1, cy: gy, r: 9 }),
+                el('line', { x1: x1 - 3, x2: x1 - 3, y1: gy - 3, y2: gy + 3 }),
+                el('line', { x1: x1 + 3, x2: x1 + 3, y1: gy - 3, y2: gy + 3 }),
+                el('rect', { x: x1 - 22, y: BAND.top - 10, width: 44, height: BAND.height + 20, fill: 'transparent' }));
             svg.appendChild(grip);
         }
     }
@@ -265,10 +280,12 @@ svg.addEventListener('pointerdown', e => {
     const sched = scheduled(state, env);
     drag = {
         kind: target.getAttribute('data-drag'),
+        target,
         startX: e.clientX,
         anchor0: new Date(env.anchorTime),
         mode0: env.mode,
         retard0: env.retardHours,
+        start0: sched[0].start,
         lastEnd0: sched[sched.length - 1].end,
         scale0: currentScale,
         moved: false,
@@ -292,26 +309,60 @@ svg.addEventListener('pointermove', e => {
         if (drag.kind === 'pan') {
             const dMin = Math.round(-dx / pxPerMin / 15) * 15;
             store.setEnv({ anchorTime: new Date(drag.anchor0.getTime() + dMin * 60000) });
+            const s0 = scheduled(store.get().state, store.get().env)[0].start;
+            hud(`Start ${dayLong.format(s0)}, ${timeFmt.format(s0)}`);
         } else if (drag.kind === 'bake') {
             const dMin = Math.round(dx / pxPerMin / 15) * 15;
-            store.setEnv({ mode: 'ready', anchorTime: new Date(drag.lastEnd0.getTime() + dMin * 60000) });
+            const ready = new Date(drag.lastEnd0.getTime() + dMin * 60000);
+            store.setEnv({ mode: 'ready', anchorTime: ready });
+            hud(`Bread ready ${dayLong.format(ready)}, ${timeFmt.format(ready)}`);
         } else if (drag.kind === 'retard') {
             const seg = drag.scale0.segments.find(s => s.id === 'retard');
             const pxPerHour = seg?.compressed && drag.retard0 > 0
                 ? (seg.x1 - seg.x0) / drag.retard0
                 : pxPerMin * 60;
             const dH = Math.round(dx / pxPerHour);
-            store.setEnv({ retardHours: Math.min(48, Math.max(0, drag.retard0 + dH)) });
+            const hours = Math.min(48, Math.max(0, drag.retard0 + dH));
+            store.setEnv({ retardHours: hours });
+            hud(`Cold rest: ${hours} h`);
         }
     });
 });
 
 const endDrag = e => {
     if (svg.hasPointerCapture?.(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    const finished = drag;
     drag = null;
+    hud('');
+    // Tap (no movement) = open an editor instead — the mobile-friendly path
+    if (finished && !finished.moved && e.type === 'pointerup') {
+        if (finished.kind === 'bake') {
+            popover.open(finished.target, {
+                kind: 'time', label: 'Bread ready at', value: finished.lastEnd0,
+                onInput: d => store.setEnv({ mode: 'ready', anchorTime: d }),
+            });
+        } else if (finished.kind === 'retard') {
+            popover.open(finished.target, {
+                kind: 'number', label: 'Cold rest', value: finished.retard0, min: 0, max: 48, step: 1, unit: ' h',
+                onInput: v => store.setEnv({ retardHours: v }),
+            });
+        } else {
+            popover.open(finished.target, {
+                kind: 'time', label: 'I start at', value: finished.start0,
+                onInput: d => store.setEnv({ mode: 'start', anchorTime: d }),
+            });
+        }
+    }
 };
 svg.addEventListener('pointerup', endDrag);
 svg.addEventListener('pointercancel', endDrag);
+
+const hudEl = $('hud');
+
+function hud(text) {
+    hudEl.textContent = text;
+    hudEl.classList.toggle('on', !!text);
+}
 
 /* ---------- boot ---------- */
 

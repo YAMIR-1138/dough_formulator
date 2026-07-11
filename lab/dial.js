@@ -63,19 +63,27 @@ function makeDial({ min, max, step, format, unit, onChange }) {
     const unitText = el('text', { class: 'unit', x: C, y: C + 44, 'text-anchor': 'middle' }, unit || '');
     svg.append(valueText, unitText);
 
-    let value = min;
+    let value = min;        // committed, snapped to step
+    let floatValue = min;   // smooth visual value — follows the finger 1:1
 
-    function set(v) {
-        value = Math.min(max, Math.max(min, v));
-        const deg = angleOf(min, max, value);
+    function paint(v) {
+        const deg = angleOf(min, max, v);
         fill.setAttribute('d', arcPath(C, C, R, DIAL.start, deg));
         const rad = (deg - 90) * Math.PI / 180;
         knob.setAttribute('cx', C + R * Math.cos(rad));
         knob.setAttribute('cy', C + R * Math.sin(rad));
+    }
+
+    function set(v) {
+        value = Math.min(max, Math.max(min, v));
+        floatValue = value;
+        paint(value);
         valueText.textContent = format ? format(value) : String(value);
     }
 
-    // Relative-delta rotation: grabbing anywhere adjusts from the current value
+    // Relative-delta rotation: grabbing anywhere adjusts from the current
+    // value. The arc/knob track the raw angle (smooth); the readout and the
+    // formula update at snap steps.
     let dragging = false;
     let lastDeg = 0;
 
@@ -88,6 +96,7 @@ function makeDial({ min, max, step, format, unit, onChange }) {
         e.preventDefault();
         svg.setPointerCapture(e.pointerId);
         dragging = true;
+        floatValue = value;
         const c = center();
         lastDeg = pointerAngle(c.x, c.y, e.clientX, e.clientY);
     });
@@ -97,16 +106,19 @@ function makeDial({ min, max, step, format, unit, onChange }) {
         const deg = pointerAngle(c.x, c.y, e.clientX, e.clientY);
         const delta = Math.max(-90, Math.min(90, angleDelta(lastDeg, deg)));
         lastDeg = deg;
-        const raw = value + (delta / DIAL.sweep) * (max - min);
-        const snapped = valueOf(min, max, step, angleOf(min, max, raw));
+        floatValue = Math.min(max, Math.max(min, floatValue + (delta / DIAL.sweep) * (max - min)));
+        paint(floatValue);
+        const snapped = valueOf(min, max, step, angleOf(min, max, floatValue));
         if (snapped !== value) {
-            set(snapped);
+            value = snapped;
+            valueText.textContent = format ? format(value) : String(value);
             onChange(snapped);
         }
     });
     const end = e => {
         if (svg.hasPointerCapture?.(e.pointerId)) svg.releasePointerCapture(e.pointerId);
         dragging = false;
+        paint(value);   // settle onto the snapped position
     };
     svg.addEventListener('pointerup', end);
     svg.addEventListener('pointercancel', end);

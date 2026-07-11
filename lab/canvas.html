@@ -22,9 +22,13 @@
         </header>
 
         <div class="canvas-layout">
-            <svg id="jar" class="jar-svg" viewBox="0 0 410 600" aria-label="Dough composition jar"></svg>
+            <div>
+                <div class="drag-hud" id="hud" aria-live="polite"></div>
+                <svg id="jar" class="jar-svg" viewBox="0 0 410 600" aria-label="Dough composition jar"></svg>
+            </div>
             <aside class="detail-panel" id="detail"></aside>
         </div>
+        <p class="caption no-print" style="margin-top:0.6rem">Grip a handle on the jar's left edge and pull — a ruler appears to guide you. Tap any layer for details and fine-tuning.</p>
     </div>
 
     <script type="module" src="canvas.js"></script>

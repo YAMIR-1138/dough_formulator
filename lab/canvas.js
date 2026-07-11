@@ -30,9 +30,9 @@ renderSwitcher($('lab-nav'), 'canvas');
 
 /* ---------- geometry constants ---------- */
 
-const JAR = { left: 74, right: 294, top: 92, bottom: 556 };
-const RAIL = { x: 300, w: 88 };      // margin labels / proxy handles
-const GUTTER = { x: 66 };            // etched gram scale (right-aligned at x)
+const JAR = { left: 28, right: 294, top: 92, bottom: 556 };   // interior 266px; axis x=161
+const ETCH = { tickX: 29, minorLen: 7, majorLen: 12, labelX: 45 };   // scale etched inside the glass
+const TAB = { clipX: 286, rightX: 386, h: 48, pitch: 56, yMax: 530 }; // clip-on tab cards
 const SHELF = { y: 590, h: 60 };     // boule shelf
 const CELLAR = { cx: 342, cy: 58 };  // salt cellar, in the margin above the rail
 const STAGE_PX = 180;
@@ -271,7 +271,7 @@ function render(state) {
         if (layer.kind === 'starter' && h > 16 && !dimmed) {
             const count = Math.max(2, Math.min(9, Math.round(recipe.starterPct / 4)));
             for (let i = 0; i < count; i++) {
-                const bx = JAR.left + 14 + ((i * 83) % (JAR.right - JAR.left - 28));
+                const bx = JAR.left + 24 + ((i * 83) % (JAR.right - JAR.left - 38));
                 const by = y0 - 4 - ((i * 37) % Math.max(6, h - 10));
                 bandGroup.appendChild(el('circle', {
                     class: 'bubble', cx: bx, cy: by, r: 1.4 + (i % 3) * 0.7,
@@ -285,7 +285,7 @@ function render(state) {
             const cream = CREAM_TEXT.has(layer.textKey);
             const midY = (y0 + y1) / 2 + 4;
             bandGroup.appendChild(el('text', {
-                class: 'inband-name' + (cream ? ' cream' : ''), x: JAR.left + 12, y: midY,
+                class: 'inband-name' + (cream ? ' cream' : ''), x: JAR.left + 48, y: midY,
             }, layer.label));
             bandGroup.appendChild(el('text', {
                 class: 'inband-value' + (cream ? ' cream' : ''), x: JAR.right - 12, y: midY,
@@ -301,7 +301,7 @@ function render(state) {
     if (!layout.focus) {
         drawBoundaries(layers, bands, recipe);
         drawSurface(layers, bands, recipe, state);
-        drawMarginProxies(thin, recipe);
+        drawMarginProxies(thin, recipe, bands.get(layers[layers.length - 1].id).y1);
         drawCellar(recipe);
     } else {
         // Focus mode: tap anywhere outside the stage to close
@@ -331,6 +331,10 @@ function drawGlass() {
 function drawGutterScale(layout, layers, bands) {
     const g = el('g', { class: 'gutter' });
     if (!layout.focus && layout.scale) {
+        // Graduations etched on the inside of the glass, like real labware.
+        // Numbers stop at the dough surface (those grams don't exist yet),
+        // so they can never collide with the headline - ticks keep going.
+        const topY = bands.get(layers[layers.length - 1].id).y1;
         const cap = layout.scale.capacity;
         const { labelStep, minorStep } = layout.scale;
         for (let grams = 0; grams <= cap; grams += minorStep) {
@@ -339,20 +343,20 @@ function drawGutterScale(layout, layers, bands) {
             const major = grams % labelStep === 0;
             g.appendChild(el('line', {
                 class: 'gutter-tick' + (major ? ' major' : ''),
-                x1: GUTTER.x - (major ? 12 : 6), x2: GUTTER.x, y1: y, y2: y,
+                x1: ETCH.tickX, x2: ETCH.tickX + (major ? ETCH.majorLen : ETCH.minorLen), y1: y, y2: y,
             }));
-            if (major && grams > 0) {
+            if (major && grams > 0 && y >= topY) {
                 g.appendChild(el('text', {
-                    class: 'gutter-label', x: GUTTER.x - 16, y: y + 3.5, 'text-anchor': 'end',
+                    class: 'gutter-label etched', x: ETCH.labelX, y: y + 3.5,
                 }, fmtInt(grams)));
             }
         }
     } else if (layout.focus) {
-        // The glass admits the lie: dashed etch spanning the stage
+        // The glass admits the lie: dashed etch outside the wall, spanning the stage
         const b = bands.get(view.focused);
         if (b) {
             g.appendChild(el('line', {
-                class: 'gutter-broken', x1: GUTTER.x - 6, x2: GUTTER.x - 6, y1: b.y1, y2: b.y0,
+                class: 'gutter-broken', x1: 21, x2: 21, y1: b.y1, y2: b.y0,
             }));
         }
     }
@@ -389,39 +393,79 @@ function drawSurface(layers, bands, recipe, state) {
     const y = topBand.y1;
     const g = el('g', { class: 'surface' });
     g.appendChild(el('line', { class: 'surface-line', x1: JAR.left - 8, x2: JAR.right + 8, y1: y, y2: y }));
-    // Headline doubles as the batch handle: drag it to scale the recipe
-    g.appendChild(el('text', {
-        class: 'surface-headline', 'data-act': 'surface',
-        x: (JAR.left + JAR.right) / 2, y: y - 10, 'text-anchor': 'middle',
-    }, `${displayGrams(recipe.doughWeight)} g · ${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`));
+    // One occupant per slot: the zone flash borrows the headline's place
+    const now = performance.now();
+    if (y - JAR.top >= 26) {
+        if (view.zoneFlash && now < view.zoneFlash.until) {
+            g.appendChild(el('text', {
+                class: 'zone-flash', x: (JAR.left + JAR.right) / 2, y: y - 12, 'text-anchor': 'middle',
+            }, view.zoneFlash.name));
+            requestAnimationFrame(() => store.rerender());
+        } else {
+            g.appendChild(el('text', {
+                class: 'surface-headline', 'data-act': 'surface',
+                x: (JAR.left + JAR.right) / 2, y: y - 12, 'text-anchor': 'middle',
+            }, `${displayGrams(recipe.doughWeight)} g · ${numberWord(state.numLoaves)} ${state.numLoaves === 1 ? 'loaf' : 'loaves'}`));
+        }
+    }
     g.appendChild(el('rect', {
         'data-act': 'surface', x: JAR.left, y: y - 34, width: JAR.right - JAR.left, height: 44, fill: 'transparent',
     }));
     svg.appendChild(g);
 }
 
-function drawMarginProxies(thin, recipe) {
-    // Margin labels for thin bands: always readable, and each block is a
-    // fat drag proxy for its band (drag vertically = edit; tap = focus)
-    let lastY = -Infinity;
-    for (const { layer, mid } of thin) {
-        const y = Math.max(mid, lastY + 48);
-        lastY = y;
+function drawMarginProxies(thin, recipe, topY) {
+    // Clip-on tab cards: bright cards clipped onto the jar wall at their
+    // band's height, spine in the band's color, the page's only shadow.
+    // Each is a fat drag proxy (drag = edit; tap = focus).
+    if (!thin.length) return;
+    // Two-pass stacking solver: ideal at band mid, clamped, then spread
+    const yMin = Math.max(130, topY + 26);
+    const sorted = [...thin].sort((a, b) => a.mid - b.mid);
+    const ys = sorted.map(t => Math.min(TAB.yMax, Math.max(yMin, t.mid)));
+    for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + TAB.pitch);
+    if (ys[ys.length - 1] > TAB.yMax) {
+        ys[ys.length - 1] = TAB.yMax;
+        for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - TAB.pitch);
+        if (ys[0] < yMin) ys[0] = yMin;
+    }
+
+    sorted.forEach(({ layer, mid }, i) => {
+        const y = ys[i];
         const g = el('g', { class: 'proxy', 'data-act': `proxy:${layer.id}` });
+        // Stem in the band's color, only when the card is displaced
+        if (Math.abs(y - mid) > 3) {
+            g.appendChild(el('line', {
+                class: 'proxy-stem', x1: JAR.right + 2.5, x2: JAR.right + 2.5,
+                y1: mid, y2: y, stroke: layer.color,
+            }));
+        }
         g.appendChild(el('path', {
-            class: 'leader',
-            d: `M ${JAR.right + 2} ${mid} H ${RAIL.x - 4} ${Math.abs(y - mid) > 2 ? `L ${RAIL.x + 2} ${y}` : ''}`,
+            class: 'proxy-card',
+            d: `M ${TAB.clipX} ${y - 24} H ${TAB.rightX - 11} Q ${TAB.rightX} ${y - 24} ${TAB.rightX} ${y - 13}
+                V ${y + 13} Q ${TAB.rightX} ${y + 24} ${TAB.rightX - 11} ${y + 24} H ${TAB.clipX} Z`,
         }));
         g.appendChild(el('rect', {
-            class: 'proxy-hit', x: RAIL.x - 2, y: y - 22, width: RAIL.w, height: 44, rx: 7,
+            class: 'proxy-spine', x: TAB.clipX, y: y - 24, width: 7, height: TAB.h, fill: layer.color,
         }));
-        g.appendChild(el('path', {
-            class: 'proxy-grip', d: `M ${RAIL.x + 5} ${y - 13} v 26 M ${RAIL.x + 10} ${y - 13} v 26`,
+        for (const dy of [-8, 0, 8]) {
+            g.appendChild(el('circle', { class: 'proxy-dot', cx: TAB.clipX + 3.5, cy: y + dy, r: 1.3 }));
+        }
+        const name = el('text', { class: 'proxy-name', x: TAB.clipX + 13, y: y - 8 }, layer.label);
+        if (layer.label.length > 10) {
+            name.setAttribute('textLength', '74');
+            name.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+        }
+        g.appendChild(name);
+        const grams = `${displayGrams(layer.grams)} g`;
+        const pct = valueLine(layer, recipe).split('·')[1] || '';
+        g.appendChild(el('text', { class: 'proxy-value', x: TAB.clipX + 13, y: y + 11 },
+            el('tspan', {}, grams), el('tspan', { class: 'pct' }, ` ·${pct}`)));
+        g.appendChild(el('rect', {
+            x: TAB.clipX - 4, y: y - 28, width: 390 - TAB.clipX, height: 56, fill: 'transparent',
         }));
-        g.appendChild(el('text', { class: 'proxy-name', x: RAIL.x + 18, y: y - 5 }, layer.label));
-        g.appendChild(el('text', { class: 'proxy-value', x: RAIL.x + 18, y: y + 11 }, valueLine(layer, recipe)));
         svg.appendChild(g);
-    }
+    });
 }
 
 function drawCellar(recipe) {
@@ -526,33 +570,29 @@ function mkTextButton(x, y, label, act) {
 }
 
 function drawHeadspace(layers, bands, recipe, state, now) {
-    const topY = bands.get(layers[layers.length - 1].id).y1;
-    const y = Math.max(JAR.top + 22, topY - 46);
-    const g = el('g', { class: 'headspace' });
-    if (view.zoneFlash && now < view.zoneFlash.until) {
-        g.appendChild(el('text', {
-            class: 'zone-flash', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
-        }, view.zoneFlash.name));
-        requestAnimationFrame(() => store.rerender());
-    } else if (view.focused) {
+    // Colophon: one quiet caption line under the glass, always present
+    let text;
+    if (view.focused) {
         const layer = layers.find(l => l.id === view.focused);
-        if (layer) {
-            const kindKey = layer.kind === 'water' ? 'hydration' : layer.kind === 'flour' ? 'grain' : layer.kind;
-            const val = layer.kind === 'water' ? recipe.hydration
-                : layer.kind === 'flour' ? recipe.wholeGrainPct
-                : layer.kind === 'starter' ? recipe.starterPct : recipe.saltPct;
-            g.appendChild(el('text', {
-                class: 'headspace-caption', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
-            }, caption(kindKey, val)));
-        }
-    } else if (now < view.undoUntil && view.undo.length) {
-        g.appendChild(mkTextButton((JAR.left + JAR.right) / 2 - 30, y, '↶ undo', 'undo'));
+        const kindKey = layer?.kind === 'water' ? 'hydration' : layer?.kind === 'flour' ? 'grain' : layer?.kind;
+        const val = layer?.kind === 'water' ? recipe.hydration
+            : layer?.kind === 'flour' ? recipe.wholeGrainPct
+            : layer?.kind === 'starter' ? recipe.starterPct : recipe.saltPct;
+        text = layer ? caption(kindKey, val) : '';
     } else {
-        g.appendChild(el('text', {
-            class: 'headspace-stats', x: (JAR.left + JAR.right) / 2, y, 'text-anchor': 'middle',
-        }, `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented`));
+        text = `${formatPct(recipe.wholeGrainPct)}% whole grain · ${formatPct(recipe.prefermentedFlourPct)}% prefermented`;
     }
-    svg.appendChild(g);
+    svg.appendChild(el('text', {
+        class: 'colophon', x: (JAR.left + JAR.right) / 2, y: JAR.bottom + 28, 'text-anchor': 'middle',
+    }, text));
+
+    // Undo: a fixed pill in the top-left corner, away from everything
+    if (now < view.undoUntil && view.undo.length) {
+        svg.appendChild(el('g', { class: 'undo-pill', 'data-act': 'undo' },
+            el('rect', { class: 'pill-body', x: 8, y: 16, width: 72, height: 32, rx: 16 }),
+            el('text', { class: 'pill-label', x: 44, y: 37, 'text-anchor': 'middle' }, '↶ undo'),
+            el('rect', { x: 0, y: 8, width: 88, height: 48, fill: 'transparent' })));
+    }
 }
 
 let ghosts = [];   // { y, label, until }
@@ -579,12 +619,12 @@ function drawGhosts(now) {
 function drawShelf(recipe, state) {
     const g = el('g', { class: 'shelf' });
     const cy = SHELF.y + 26;
-    g.appendChild(el('line', { class: 'shelf-line', x1: 40, x2: 350, y1: SHELF.y + 44, y2: SHELF.y + 44 }));
+    g.appendChild(el('line', { class: 'shelf-line', x1: 24, x2: 380, y1: SHELF.y + 44, y2: SHELF.y + 44 }));
     // Boules: one per loaf, radius follows per-loaf weight
     const n = state.numLoaves;
     const r = Math.max(10, Math.min(20, 8 + recipe.weightPerLoaf / 90));
     const span = Math.min(200, n * (r * 2 + 10));
-    const x0 = 195 - span / 2 + r;
+    const x0 = 161 - span / 2 + r;
     for (let i = 0; i < n; i++) {
         const bx = x0 + i * (span - r * 2) / Math.max(1, n - 1 || 1);
         const boule = el('g', { class: 'boule' },
@@ -592,9 +632,9 @@ function drawShelf(recipe, state) {
             el('path', { class: 'score', d: `M ${bx - r * 0.5} ${SHELF.y + 33} q ${r * 0.5} -4 ${r} 0` }));
         g.appendChild(boule);
     }
-    g.appendChild(mkTextButton(52, cy + 4, '−', 'loaf-minus'));
-    g.appendChild(mkTextButton(318, cy + 4, '+', 'loaf-plus'));
-    g.appendChild(el('text', { class: 'shelf-label', x: 195, y: SHELF.y + 58, 'text-anchor': 'middle' },
+    g.appendChild(mkTextButton(44, cy + 4, '−', 'loaf-minus'));
+    g.appendChild(mkTextButton(278, cy + 4, '+', 'loaf-plus'));
+    g.appendChild(el('text', { class: 'shelf-label', x: 161, y: SHELF.y + 58, 'text-anchor': 'middle' },
         `${numberWord(n)} ${n === 1 ? 'loaf' : 'loaves'} · ${displayGrams(recipe.weightPerLoaf)} g each · ≈ ${displayGrams(recipe.bakedWeightPerLoaf)} g baked`));
     svg.appendChild(g);
 }

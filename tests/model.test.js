@@ -3,6 +3,8 @@ import {
     defaultState, derive, setHydration, setSalt, setStarterPercent,
     setStarterGrams, setStarterHydration, setFlourTotal, scaleToDoughWeight,
     setPinFlour, setFlourBlend, normalizeFlours, sanitizeState,
+    setPrefermentedFlour, setAddIns, setNumLoaves, setLoafWeight,
+    setBakeLoss, setReservedWater,
 } from '../js/model.js';
 import { reconcileSum, displayGrams } from '../js/format.js';
 
@@ -147,4 +149,67 @@ test('sanitizeState: accepts valid, repairs invalid, rejects garbage', () => {
 test('displayGrams precision switches at 50g', () => {
     eq(displayGrams(20.34), 20.3, 'small amounts get 0.1g');
     eq(displayGrams(650.4), 650, 'large amounts get 1g');
+});
+
+test('setPrefermentedFlour: starter mass follows PFF at any starter hydration', () => {
+    // PFF 15% at 100% starter hydration → starter mass = 15 * 2 = 30%
+    let s = setPrefermentedFlour(defaultState(), 15);
+    close(s.starter.pct, 30, 1e-9, 'pct from PFF @100%');
+    close(derive(s).prefermentedFlourPct, 15, 1e-9, 'PFF round-trips');
+    // Same PFF with a stiff 50% starter → mass = 15 * 1.5 = 22.5%
+    s = setPrefermentedFlour(setStarterHydration(defaultState(), 50), 15);
+    close(s.starter.pct, 22.5, 1e-9, 'pct from PFF @50%');
+    close(derive(s).prefermentedFlourPct, 15, 1e-9, 'PFF round-trips stiff');
+});
+
+test('Liquid add-ins: hydration lock reduces added water', () => {
+    // 5% maple syrup (liquid) on the Tartine base
+    const s = setAddIns(defaultState(), [{ name: 'maple syrup', pct: 5, liquid: true }]);
+    const r = derive(s);
+    close(r.liquidAddInWater, 50, 1e-9, 'liquid grams');
+    close(r.waterToAdd, 600, 1e-9, 'added water shrinks by 50 (was 650)');
+    close(r.totalWater, 750, 1e-9, 'true total water unchanged');
+    close(r.hydration, 75, 1e-9, 'true hydration preserved');
+    close(r.doughWeight, 1770, 1e-9, 'liquid add-in does not change dough weight (it IS the water)');
+});
+
+test('Solid add-ins: add mass, hydration untouched', () => {
+    const s = setAddIns(defaultState(), [{ name: 'seeds', pct: 10, liquid: false }]);
+    const r = derive(s);
+    close(r.solidAddInMass, 100, 1e-9, 'seed grams');
+    close(r.waterToAdd, 650, 1e-9, 'water unchanged');
+    close(r.doughWeight, 1870, 1e-9, 'dough gains seed mass');
+});
+
+test('scaleToDoughWeight accounts for solid add-ins', () => {
+    const s = setAddIns(defaultState(), [{ name: 'seeds', pct: 10, liquid: false }]);
+    const scaled = scaleToDoughWeight(s, 935);
+    close(derive(scaled).doughWeight, 935, 1e-9, 'hits target with solids');
+    close(scaled.flourTotal, 500, 1e-9, 'flour = 935 / 1.87');
+});
+
+test('Loaves: per-loaf weight, baking loss, and rescale-by-count', () => {
+    let s = setNumLoaves(defaultState(), 2, { keepPerLoaf: false });
+    let r = derive(s);
+    close(r.weightPerLoaf, 885, 1e-9, 'two loaves from 1770g');
+    close(r.bakedWeightPerLoaf, 885 * 0.88, 1e-9, 'default 12% bake loss');
+    // Set per-loaf target: 2 loaves × 900g = 1800g total
+    s = setLoafWeight(s, 900);
+    close(derive(s).doughWeight, 1800, 1e-9, 'loaf weight × count');
+    // Adding a loaf keeps per-loaf weight → total grows
+    s = setNumLoaves(s, 3);
+    r = derive(s);
+    close(r.weightPerLoaf, 900, 1e-6, 'per-loaf preserved');
+    close(r.doughWeight, 2700, 1e-6, 'total rescaled');
+    // Bake loss is display-only math
+    s = setBakeLoss(s, 10);
+    close(derive(s).bakedWeightPerLoaf, 810, 1e-6, 'custom loss');
+});
+
+test('Reserved water (bassinage) splits added water', () => {
+    const s = setReservedWater(defaultState(), 10);
+    const r = derive(s);
+    close(r.waterToAdd, 650, 1e-9, 'added water unchanged');
+    close(r.reservedWater, 65, 1e-9, 'reserve 10%');
+    close(r.mixingWater, 585, 1e-9, 'mixing water');
 });

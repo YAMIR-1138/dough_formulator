@@ -29,6 +29,10 @@ export function encodeState(state, env = {}) {
             saltPct: state.saltPct,
             starter: { pct: state.starter.pct, hydration: state.starter.hydration },
             flours: state.flours.map(f => ({ key: f.key, pct: Math.round(f.pct * 10) / 10 })),
+            addIns: state.addIns.length ? state.addIns : undefined,
+            numLoaves: state.numLoaves !== 1 ? state.numLoaves : undefined,
+            bakeLossPct: state.bakeLossPct !== 12 ? state.bakeLossPct : undefined,
+            reservedWaterPct: state.reservedWaterPct || undefined,
             pinFlour: state.pinFlour || undefined,
         },
         e: {

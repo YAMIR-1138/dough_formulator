@@ -1,799 +1,406 @@
 /**
- * Sourdough UI Module
- * Handles all UI interactions and DOM manipulations
+ * ui.js — DOM rendering. Pure "state in, pixels out": app.js owns the state
+ * and event wiring; this module only knows how to draw it.
  */
+import { FLOUR_TYPES } from './model.js';
+import { displayGrams, formatPct, reconcileSum, formatDuration, cToF, round1 } from './format.js';
 
-class SourdoughUI {
-    constructor() {
-        // DOM references
-        this.elements = {
-            // Mode toggle buttons
-            // simpleMode: document.getElementById('simple-mode-btn'),
-            // advancedMode: document.getElementById('advanced-mode-btn'),
-            themeToggle: document.getElementById('theme-toggle-btn'),
-            
-            // Calculator inputs
-            doughWeight: document.getElementById('dough-weight'),
-            flourWeight: document.getElementById('flour-weight'),
-            hydration: document.getElementById('hydration'),
-            hydrationSlider: document.getElementById('hydration-slider'),
-            starterAmount: document.getElementById('starter-amount'),
-            starterUnit: document.getElementById('starter-unit'),
-            starterHydration: document.getElementById('starter-hydration'),
-            starterHydrationSlider: document.getElementById('starter-hydration-slider'),
-            saltPercentage: document.getElementById('salt-percentage'),
-            saltPercentageSlider: document.getElementById('salt-percentage-slider'),
-            
-            // Advanced flour blend inputs
-            flourItemsContainer: document.getElementById('flour-items-container'),
-            addFlourBtn: document.getElementById('add-flour-btn'),
-            flourPresets: document.getElementById('flour-presets'),
-            saveBlendBtn: document.getElementById('save-blend-btn'),
-            
-            // Recipe results
-            resultDoughWeight: document.getElementById('result-dough-weight'),
-            resultHydration: document.getElementById('result-hydration'),
-            resultFlour: document.getElementById('result-flour'),
-            resultWater: document.getElementById('result-water'),
-            resultStarter: document.getElementById('result-starter'),
-            resultSalt: document.getElementById('result-salt'),
-            flourBreakdownList: document.getElementById('flour-breakdown-list'),
-            
-            // Timeline inputs
-            timelineMode: document.getElementById('timeline-mode'),
-            timelineDate: document.getElementById('timeline-date'),
-            roomTemp: document.getElementById('room-temp'),
-            roomTempSlider: document.getElementById('room-temp-slider'),
-            timelineSteps: document.getElementById('timeline-steps'),
-            
-            // Recipe actions
-            saveRecipeBtn: document.getElementById('save-recipe-btn'),
-            copyRecipeBtn: document.getElementById('copy-recipe-btn'),
-            
-            // Saved recipes
-            recipesContainer: document.getElementById('recipes-container'),
-            noRecipesMessage: document.getElementById('no-recipes-message'),
-            exportRecipesBtn: document.getElementById('export-recipes-btn'),
-            importRecipesInput: document.getElementById('import-recipes-input'),
-            
-            // Modals
-            recipeModal: document.getElementById('recipe-modal'),
-            recipeName: document.getElementById('recipe-name'),
-            recipeNotes: document.getElementById('recipe-notes'),
-            saveRecipeConfirm: document.getElementById('save-recipe-confirm'),
-            cancelSave: document.getElementById('cancel-save'),
-            flourModal: document.getElementById('flour-modal'),
-            blendName: document.getElementById('blend-name'),
-            saveBlendConfirm: document.getElementById('save-blend-confirm'),
-            cancelBlendSave: document.getElementById('cancel-blend-save'),
-            closeModalBtns: document.querySelectorAll('.close-modal'),
-            
-            // Active anchor display
-            currentAnchor: document.getElementById('current-anchor'),
-            
-            // Temperature unit toggle
-            tempUnitToggle: document.getElementById('temp-unit-toggle'),
-            
-            // Timeline toggle
-            timelineToggle: document.getElementById('toggle-timeline-btn'),
-            timelineContent: document.getElementById('timeline-content'),
-            
-            // Input field groups
-            doughWeightGroup: document.getElementById('dough-weight-group'),
-            flourWeightGroup: document.getElementById('flour-weight-group'),
-            hydrationGroup: document.getElementById('hydration-group'),
-            starterGroup: document.getElementById('starter-group'),
-            saltGroup: document.getElementById('salt-group')
-        };
-        
-        // State
-        this.state = {
-            isDarkTheme: false,
-            editingRecipeId: null,
-            flourTypes: [
-                { id: 'bread', name: 'Bread Flour' },
-                { id: 'allPurpose', name: 'All Purpose Flour' },
-                { id: 'wholeWheat', name: 'Whole Wheat Flour' },
-                { id: 'rye', name: 'Rye Flour' },
-                { id: 'spelt', name: 'Spelt Flour' },
-                { id: 'semolina', name: 'Semolina Flour' }
-            ],
-            temperatureUnit: 'C', // Default to Celsius
-            timelineCollapsed: false
-        };
-        
-        // Initialize the UI
-        this._initUI();
+const $ = id => document.getElementById(id);
+
+/* ---------- change-pulse helper ---------- */
+
+/**
+ * Set an element's text; if it changed, pulse-highlight it so the user can
+ * see what their edit affected.
+ */
+export function setText(el, text) {
+    if (el.textContent === String(text)) return;
+    el.textContent = text;
+    el.classList.remove('just-changed');
+    // Force a reflow so re-adding the class restarts the animation
+    void el.offsetWidth;
+    el.classList.add('just-changed');
+}
+
+/** Update an input's value unless the user is currently typing in it. */
+export function setInput(el, value) {
+    if (document.activeElement === el) return;
+    const str = String(value);
+    if (el.value !== str) el.value = str;
+}
+
+/* ---------- formula card ---------- */
+
+/**
+ * Render the whole formula card.
+ * recipe = derive(state); uiState = { starterUnit: 'pct'|'g' }.
+ */
+export function renderFormula(recipe, state, uiState) {
+    setInput($('dough-weight'), displayGrams(recipe.doughWeight));
+    setInput($('flour-total'), displayGrams(recipe.flourTotal));
+    setInput($('hydration'), round1(recipe.hydration));
+    setInput($('hydration-slider'), Math.round(recipe.hydration));
+    setInput($('salt-pct'), round1(recipe.saltPct));
+    setInput($('salt-slider'), round1(recipe.saltPct));
+    setInput($('starter-hydration'), Math.round(recipe.starterHydration));
+    setInput($('starter-slider'), Math.round(recipe.starterPct));
+    setInput($('num-loaves'), recipe.numLoaves);
+    setInput($('loaf-weight'), displayGrams(recipe.weightPerLoaf));
+    setInput($('bake-loss'), round1(recipe.bakeLossPct));
+    setText($('out-baked'), `≈ ${displayGrams(recipe.bakedWeightPerLoaf)}g baked`);
+    setInput($('pff'), round1(recipe.prefermentedFlourPct));
+    setText($('out-pff-note'), `= ${displayGrams(recipe.starterFlour)}g fermented flour`);
+    setInput($('reserved-water'), round1(recipe.reservedWaterPct));
+    setText($('out-reserved'), recipe.reservedWater > 0 ? `${displayGrams(recipe.reservedWater)}g held back` : '—');
+
+    $('pin-flour').checked = state.pinFlour;
+    $('dough-caption').textContent = state.pinFlour
+        ? 'Flour is pinned — editing dough weight changes hydration instead.'
+        : 'Editing dough weight rescales the whole recipe — all percentages stay put.';
+
+    // Starter input + its alternate reading
+    const starterOfDough = (recipe.starterMass / recipe.doughWeight) * 100;
+    if (uiState.starterUnit === 'g') {
+        setInput($('starter-value'), displayGrams(recipe.starterMass));
+        setText($('out-starter-alt'), `= ${formatPct(recipe.starterPct)}% of flour · ${formatPct(starterOfDough)}% of dough`);
+    } else {
+        setInput($('starter-value'), round1(recipe.starterPct));
+        setText($('out-starter-alt'), `= ${displayGrams(recipe.starterMass)}g · ${formatPct(starterOfDough)}% of dough`);
     }
-    
-    /**
-     * Initialize the UI and attach event listeners
-     * @private
-     */
-    _initUI() {
-        // Set current date/time for timeline
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getMinutes() % 5); // Round to nearest 5 minutes
-        this.elements.timelineDate.value = now.toISOString().slice(0, 16);
-        
-        // Set default dark/light theme
-        this._setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches);
-        
-        // Add Advanced Flour Blend template
-        this._initAdvancedFlourBlend();
-        
-        // Attach event listeners to UI elements
-        this._attachEventListeners();
-        
-        // Initialize temperature unit toggle
-        this.initTemperatureToggle();
-        
-        // Initialize timeline toggle
-        this.initTimelineToggle();
-        
-        // Initialize input field highlighting
-        this.initFieldHighlighting();
+    $('starter-unit-pct').classList.toggle('active', uiState.starterUnit !== 'g');
+    $('starter-unit-g').classList.toggle('active', uiState.starterUnit === 'g');
+
+    setText($('out-water-total'), `${displayGrams(recipe.totalWater)}g`);
+    setText($('out-starter-split'), `${displayGrams(recipe.starterFlour)}g flour + ${displayGrams(recipe.starterWater)}g water`);
+    setText($('out-salt'), `${displayGrams(recipe.salt)}g`);
+
+    renderMixPanel(recipe);
+    renderStats(recipe);
+    setText($('blend-note'), `Whole grain: ${formatPct(recipe.wholeGrainPct)}% — feeds the fermentation model below.`);
+}
+
+/** The "on the scale" panel — displayed lines always sum to the total. */
+function renderMixPanel(recipe) {
+    const lines = [
+        { key: 'flour', value: recipe.flourToAdd },
+        { key: 'water', value: recipe.waterToAdd },
+        { key: 'starter', value: recipe.starterMass },
+        { key: 'salt', value: recipe.salt },
+        ...recipe.addIns.map((a, i) => ({ key: `addin${i}`, value: a.grams })),
+    ];
+    const { parts, total } = reconcileSum(lines);
+    const get = key => parts.find(p => p.key === key).value;
+
+    const flourSubRows = recipe.flourBreakdown.length > 1
+        ? recipe.flourBreakdown.map(f =>
+            `<tr class="mix-sub"><td>↳ ${FLOUR_TYPES[f.key]?.label || f.key}</td><td>${displayGrams(f.added)}g</td></tr>`
+        ).join('')
+        : '';
+
+    // Bassinage split shown as informational sub-rows under water
+    const waterSubRows = recipe.reservedWater > 0
+        ? `<tr class="mix-sub"><td>↳ in the mix</td><td>${displayGrams(recipe.mixingWater)}g</td></tr>
+           <tr class="mix-sub"><td>↳ bassinage (add during folds)</td><td>${displayGrams(recipe.reservedWater)}g</td></tr>`
+        : '';
+
+    const addInRows = recipe.addIns.map((a, i) =>
+        `<tr><td>${escapeHtml(a.name) || 'Add-in'}${a.liquid ? ' (liquid — counted as water)' : ''}</td><td data-mix="addin${i}"></td></tr>`
+    ).join('');
+
+    $('mix-body').innerHTML = `
+        <tr><td>Flour</td><td data-mix="flour"></td></tr>
+        ${flourSubRows}
+        <tr><td>Water</td><td data-mix="water"></td></tr>
+        ${waterSubRows}
+        <tr><td>Starter (${formatPct(recipe.starterHydration)}% hydration)</td><td data-mix="starter"></td></tr>
+        <tr><td>Salt</td><td data-mix="salt"></td></tr>
+        ${addInRows}
+        <tr class="total"><td>Total dough${recipe.numLoaves > 1 ? ` (${recipe.numLoaves} loaves)` : ''}</td><td data-mix="total"></td></tr>`;
+
+    for (const part of parts) {
+        setText(document.querySelector(`[data-mix="${part.key}"]`), `${get(part.key)}g`);
     }
-    
-    /**
-     * Initialize the advanced flour blend UI
-     * @private
-     */
-    _initAdvancedFlourBlend() {
-        // Add default flour types
-        this.addAdvancedFlourItem('bread', 80);
-        this.addAdvancedFlourItem('wholeWheat', 20);
+    setText(document.querySelector('[data-mix="total"]'), `${total}g`);
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderStats(recipe) {
+    const stats = [
+        { label: 'Hydration', value: `${formatPct(recipe.hydration)}%` },
+        { label: 'Prefermented flour', value: `${formatPct(recipe.prefermentedFlourPct)}%` },
+        { label: 'Whole grain', value: `${formatPct(recipe.wholeGrainPct)}%` },
+        { label: 'Salt', value: `${formatPct(recipe.saltPct)}%` },
+    ];
+    const panel = $('stats-panel');
+    if (panel.children.length !== stats.length) {
+        panel.innerHTML = stats.map((s, i) =>
+            `<div class="stat"><span class="value" data-stat="${i}"></span><span class="label">${s.label}</span></div>`
+        ).join('');
     }
-    
-    /**
-     * Attach event listeners to UI elements
-     * @private
-     */
-    _attachEventListeners() {
-        // Theme toggle
-        this.elements.themeToggle.addEventListener('click', () => this._toggleTheme());
-        
-        // Close modal buttons
-        this.elements.closeModalBtns.forEach(btn => {
-            btn.addEventListener('click', () => this._closeAllModals());
-        });
-        
-        // Generic modal close by clicking outside
-        window.addEventListener('click', (e) => {
-            if (e.target === this.elements.recipeModal) {
-                this._closeAllModals();
-            }
-            if (e.target === this.elements.flourModal) {
-                this._closeAllModals();
-            }
-        });
-        
-        // Add flour button
-        this.elements.addFlourBtn.addEventListener('click', () => {
-            this.addAdvancedFlourItem();
-        });
-        
-        // Save flour blend button
-        this.elements.saveBlendBtn.addEventListener('click', () => {
-            this._openFlourModal();
-        });
-        
-        // Confirm save blend
-        this.elements.saveBlendConfirm.addEventListener('click', () => {
-            this._saveFlourBlend();
-        });
-        
-        // Cancel blend save
-        this.elements.cancelBlendSave.addEventListener('click', () => {
-            this._closeAllModals();
-        });
-        
-        // Save recipe button
-        this.elements.saveRecipeBtn.addEventListener('click', () => {
-            this._openRecipeModal();
-        });
-        
-        // Confirm save recipe
-        this.elements.saveRecipeConfirm.addEventListener('click', () => {
-            this._saveRecipe();
-        });
-        
-        // Cancel recipe save
-        this.elements.cancelSave.addEventListener('click', () => {
-            this._closeAllModals();
-        });
-        
-        // Copy recipe button
-        this.elements.copyRecipeBtn.addEventListener('click', () => {
-            this._copyRecipeToClipboard();
-        });
-        
-        // Export recipes button
-        this.elements.exportRecipesBtn.addEventListener('click', () => {
-            this._exportRecipes();
-        });
-        
-        // Import recipes input
-        this.elements.importRecipesInput.addEventListener('change', (e) => {
-            this._importRecipes(e);
-        });
-        
-        // Slider value sync
-        this._syncSliderValues();
-    }
-    
-    /**
-     * Synchronize values between sliders and number inputs
-     * @private
-     */
-    _syncSliderValues() {
-        // Dough weight slider and input
-        this._syncSliderWithInput(document.getElementById('dough-weight-slider'), this.elements.doughWeight);
-        
-        // Hydration slider and input
-        this._syncSliderWithInput(this.elements.hydrationSlider, this.elements.hydration);
-        
-        // Starter hydration slider and input
-        this._syncSliderWithInput(this.elements.starterHydrationSlider, this.elements.starterHydration);
-        
-        // Salt percentage slider and input
-        this._syncSliderWithInput(this.elements.saltPercentageSlider, this.elements.saltPercentage);
-        
-        // Room temperature slider and input
-        this._syncSliderWithInput(this.elements.roomTempSlider, this.elements.roomTemp);
-    }
-    
-    /**
-     * Synchronize a slider with a number input
-     * @param {HTMLElement} slider - The slider element
-     * @param {HTMLElement} input - The number input element
-     * @private
-     */
-    _syncSliderWithInput(slider, input) {
-        slider.addEventListener('input', () => {
-            input.value = slider.value;
-            // Trigger change event on input to update calculations
-            input.dispatchEvent(new Event('change'));
-        });
-        
-        input.addEventListener('input', () => {
-            slider.value = input.value;
-            // Make sure changes on direct input also trigger a change event
-            if (!slider._changeListenerAdded) {
-                slider._changeListenerAdded = true;
-                input.addEventListener('change', () => {
-                    // Trigger a change event to update the calculator
-                    input.dispatchEvent(new Event('change'));
-                });
-            }
-        });
-    }
-    
-    /**
-     * Toggle between light and dark theme
-     * @private
-     */
-    _toggleTheme() {
-        this._setTheme(!this.state.isDarkTheme);
-    }
-    
-    /**
-     * Set the theme to light or dark
-     * @param {boolean} isDark - Whether to set dark theme
-     * @private
-     */
-    _setTheme(isDark) {
-        this.state.isDarkTheme = isDark;
-        
-        if (isDark) {
-            document.body.classList.add('dark-theme');
-            this.elements.themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-        } else {
-            document.body.classList.remove('dark-theme');
-            this.elements.themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+    stats.forEach((s, i) => setText(panel.querySelector(`[data-stat="${i}"]`), s.value));
+}
+
+/**
+ * (Re)build the flour-blend editor rows. Skipped while the user is typing
+ * inside the editor so focus isn't stolen mid-edit.
+ */
+export function renderBlendRows(state, { onChange, onRemove }) {
+    const container = $('blend-rows');
+    if (container.contains(document.activeElement)) return;
+
+    container.innerHTML = '';
+    state.flours.forEach((flour, index) => {
+        const grams = state.flourTotal * flour.pct / 100;
+        const row = document.createElement('div');
+        row.className = 'blend-row';
+
+        const select = document.createElement('select');
+        for (const [key, def] of Object.entries(FLOUR_TYPES)) {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = def.label;
+            opt.selected = key === flour.key;
+            select.appendChild(opt);
         }
-    }
-    
-    /**
-     * Add a flour item to the advanced flour blend UI
-     * @param {string} flourType - The type of flour to add
-     * @param {number} percentage - The percentage of the flour
-     */
-    addAdvancedFlourItem(flourType = 'bread', percentage = 0) {
-        const flourItem = document.createElement('div');
-        flourItem.className = 'advanced-flour-item';
-        
-        // Create flour type selector
-        const flourSelect = document.createElement('select');
-        flourSelect.className = 'flour-type-select';
-        
-        // Add options for flour types
-        this.state.flourTypes.forEach(type => {
-            const option = document.createElement('option');
-            option.value = type.id;
-            option.textContent = type.name;
-            flourSelect.appendChild(option);
-        });
-        
-        // Set selected flour type
-        flourSelect.value = flourType;
-        
-        // Create percentage input
-        const percentContainer = document.createElement('div');
-        percentContainer.className = 'slider-with-value';
-        
-        const percentSlider = document.createElement('input');
-        percentSlider.type = 'range';
-        percentSlider.min = '0';
-        percentSlider.max = '100';
-        percentSlider.value = percentage;
-        percentSlider.step = '5';
-        percentSlider.className = 'advanced-flour-slider';
-        
-        const percentInput = document.createElement('input');
-        percentInput.type = 'number';
-        percentInput.min = '0';
-        percentInput.max = '100';
-        percentInput.value = percentage;
-        percentInput.step = '5';
-        percentInput.className = 'advanced-flour-percent';
-        
-        const percentSign = document.createElement('span');
-        percentSign.textContent = '%';
-        
-        percentContainer.appendChild(percentSlider);
-        percentContainer.appendChild(percentInput);
-        percentContainer.appendChild(percentSign);
-        
-        // Create remove button
-        const removeBtn = document.createElement('button');
-        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-        removeBtn.addEventListener('click', () => {
-            flourItem.remove();
-            // Trigger recalculation
-            this._normalizeFlourPercentages();
-        });
-        
-        // Sync slider and input
-        this._syncSliderWithInput(percentSlider, percentInput);
-        
-        // Add change event listeners to recalculate percentages
-        percentInput.addEventListener('change', () => {
-            this._normalizeFlourPercentages();
-        });
-        
-        flourSelect.addEventListener('change', () => {
-            // Trigger recalculation
-            this._normalizeFlourPercentages();
-        });
-        
-        // Append elements to the flour item
-        flourItem.appendChild(flourSelect);
-        flourItem.appendChild(percentContainer);
-        flourItem.appendChild(removeBtn);
-        
-        // Add to container
-        this.elements.flourItemsContainer.appendChild(flourItem);
-    }
-    
-    /**
-     * Normalize flour percentages to total 100%
-     * @private
-     */
-    _normalizeFlourPercentages() {
-        // For advanced mode
-        let total = 0;
-        const percentInputs = Array.from(document.querySelectorAll('.advanced-flour-percent'));
-        
-        // Calculate total
-        percentInputs.forEach(input => {
-            total += parseFloat(input.value) || 0;
-        });
-        
-        // If total is not 0, normalize
-        if (total > 0) {
-            const factor = 100 / total;
-            percentInputs.forEach(input => {
-                const newValue = Math.round((parseFloat(input.value) || 0) * factor);
-                input.value = newValue;
-                
-                // Update corresponding slider
-                const slider = input.previousElementSibling;
-                if (slider && slider.type === 'range') {
-                    slider.value = newValue;
-                }
-            });
+        select.addEventListener('change', () => onChange(index, { key: select.value, pct: flour.pct }));
+
+        const pct = document.createElement('input');
+        pct.type = 'number';
+        pct.min = '1';
+        pct.max = '100';
+        pct.step = '1';
+        pct.value = String(round1(flour.pct));
+        pct.title = '% of total flour (auto-normalized to 100)';
+        pct.addEventListener('change', () => onChange(index, { key: flour.key, pct: Number(pct.value) || 0 }));
+
+        const gramsOut = document.createElement('span');
+        gramsOut.className = 'derived-value';
+        gramsOut.textContent = `${displayGrams(grams)}g`;
+        gramsOut.title = 'Of total flour (including what your starter contributes)';
+
+        const remove = document.createElement('button');
+        remove.className = 'icon-btn danger';
+        remove.title = 'Remove this flour';
+        remove.innerHTML = '<svg><use href="#i-trash"/></svg>';
+        remove.disabled = state.flours.length === 1;
+        remove.addEventListener('click', () => onRemove(index));
+
+        row.append(select, pct, gramsOut, remove);
+        container.appendChild(row);
+    });
+}
+
+/**
+ * (Re)build the add-ins editor. Each row: name, % of flour, grams (either
+ * edits the same canonical pct), and a "liquid" toggle that routes it into
+ * the water math.
+ */
+export function renderAddInRows(state, recipe, { onChange, onRemove }) {
+    const container = $('addin-rows');
+    if (container.contains(document.activeElement)) return;
+
+    container.innerHTML = '';
+    state.addIns.forEach((addIn, index) => {
+        const row = document.createElement('div');
+        row.className = 'blend-row';
+
+        const name = document.createElement('input');
+        name.type = 'text';
+        name.placeholder = 'e.g. toasted seeds';
+        name.value = addIn.name;
+        name.addEventListener('change', () => onChange(index, { ...addIn, name: name.value }));
+
+        const pct = document.createElement('input');
+        pct.type = 'number';
+        pct.min = '0';
+        pct.step = '0.5';
+        pct.title = '% of total flour';
+        pct.value = String(round1(addIn.pct));
+        pct.addEventListener('change', () => onChange(index, { ...addIn, pct: Number(pct.value) || 0 }));
+
+        const pctLabel = document.createElement('span');
+        pctLabel.className = 'derived-value';
+        pctLabel.style.minWidth = '1.2rem';
+        pctLabel.textContent = '%';
+
+        const grams = document.createElement('input');
+        grams.type = 'number';
+        grams.min = '0';
+        grams.step = '5';
+        grams.title = 'Grams — converts to % of flour';
+        grams.value = String(displayGrams(recipe.flourTotal * addIn.pct / 100));
+        grams.addEventListener('change', () =>
+            onChange(index, { ...addIn, pct: (Number(grams.value) || 0) / recipe.flourTotal * 100 }));
+
+        const gLabel = document.createElement('span');
+        gLabel.className = 'derived-value';
+        gLabel.style.minWidth = '1.2rem';
+        gLabel.textContent = 'g';
+
+        const liquid = document.createElement('label');
+        liquid.className = 'pin-flour-label';
+        liquid.title = 'Liquid add-ins count toward hydration; added water shrinks to keep it true';
+        const liquidBox = document.createElement('input');
+        liquidBox.type = 'checkbox';
+        liquidBox.checked = addIn.liquid;
+        liquidBox.addEventListener('change', () => onChange(index, { ...addIn, liquid: liquidBox.checked }));
+        liquid.append(liquidBox, document.createTextNode(' liquid'));
+
+        const remove = document.createElement('button');
+        remove.className = 'icon-btn danger';
+        remove.title = 'Remove';
+        remove.innerHTML = '<svg><use href="#i-trash"/></svg>';
+        remove.addEventListener('click', () => onRemove(index));
+
+        row.append(name, pct, pctLabel, grams, gLabel, liquid, remove);
+        container.appendChild(row);
+    });
+}
+
+/* ---------- timeline card ---------- */
+
+const timeFmt = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
+const dayFmt = new Intl.DateTimeFormat([], { weekday: 'short', month: 'short', day: 'numeric' });
+
+/**
+ * Render the schedule list.
+ * scheduled: steps with start/end. opts: { checklist, doneIds:Set, now:Date, onToggle }.
+ */
+export function renderSchedule(scheduled, opts) {
+    const list = $('schedule-list');
+    list.innerHTML = '';
+    const now = opts.now || new Date();
+
+    for (const step of scheduled) {
+        const li = document.createElement('li');
+        const isDone = opts.doneIds.has(step.id);
+        const isCurrent = !isDone && step.start <= now && now < step.end;
+        if (isDone) li.classList.add('done');
+        if (opts.checklist && isCurrent) li.classList.add('current');
+
+        if (opts.checklist) {
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = isDone;
+            box.addEventListener('change', () => opts.onToggle(step.id, box.checked));
+            li.appendChild(box);
         }
-    }
-    
-    /**
-     * Get the current flour blend from the UI
-     * @returns {Array} Array of flour objects with type and percentage
-     */
-    getFlourBlend() {
-        // Get advanced flour blend
-        const blend = [];
-        const flourItems = this.elements.flourItemsContainer.querySelectorAll('.advanced-flour-item');
-        
-        flourItems.forEach(item => {
-            const flourSelect = item.querySelector('.flour-type-select');
-            const percentInput = item.querySelector('.advanced-flour-percent');
-            
-            const flourType = flourSelect.value;
-            const percentage = parseFloat(percentInput.value) || 0;
-            
-            if (percentage > 0) {
-                blend.push({
-                    type: flourType,
-                    percentage: percentage
-                });
-            }
-        });
-        
-        return blend;
-    }
-    
-    /**
-     * Update the recipe display with calculated values
-     * @param {Object} recipe - The recipe object with calculated values
-     */
-    updateRecipeDisplay(recipe) {
-        // Update result values
-        this.elements.resultDoughWeight.textContent = Math.round(recipe.totalDoughWeight) + 'g';
-        this.elements.resultHydration.textContent = recipe.actualHydration + '%';
-        this.elements.resultFlour.textContent = Math.round(recipe.totalFlour) + 'g';
-        
-        // Update new "to add" values and starter components
-        const flourToAddElement = document.getElementById('result-flour-to-add');
-        if (flourToAddElement) {
-            flourToAddElement.textContent = Math.round(recipe.flourToAdd) + 'g';
-        }
-        
-        this.elements.resultWater.textContent = Math.round(recipe.totalWater) + 'g';
-        
-        const waterToAddElement = document.getElementById('result-water-to-add');
-        if (waterToAddElement) {
-            waterToAddElement.textContent = Math.round(recipe.waterToAdd) + 'g';
-        }
-        
-        this.elements.resultStarter.textContent = Math.round(recipe.starterAmount) + 'g';
-        
-        const starterFlourElement = document.getElementById('result-starter-flour');
-        if (starterFlourElement) {
-            starterFlourElement.textContent = Math.round(recipe.starterFlour) + 'g';
-        }
-        
-        const starterWaterElement = document.getElementById('result-starter-water');
-        if (starterWaterElement) {
-            starterWaterElement.textContent = Math.round(recipe.starterWater) + 'g';
-        }
-        
-        this.elements.resultSalt.textContent = recipe.salt + 'g';
-        
-        // Update flour breakdown
-        this.elements.flourBreakdownList.innerHTML = '';
-        recipe.flourBreakdown.forEach(flour => {
-            const flourName = this._getFlourName(flour.type);
-            const li = document.createElement('li');
-            li.innerHTML = `<span>${flourName}:</span> <span>${Math.round(flour.amount)}g (${flour.percentage}%)</span>`;
-            this.elements.flourBreakdownList.appendChild(li);
-        });
-    }
-    
-    /**
-     * Get a human-readable flour name
-     * @param {string} flourType - The flour type ID
-     * @returns {string} The readable flour name
-     * @private
-     */
-    _getFlourName(flourType) {
-        const flour = this.state.flourTypes.find(f => f.id === flourType);
-        return flour ? flour.name : flourType;
-    }
-    
-    /**
-     * Update the timeline display
-     * @param {Array} timeline - Array of timeline steps
-     */
-    updateTimelineDisplay(timeline) {
-        this.elements.timelineSteps.innerHTML = '';
-        
-        timeline.forEach(step => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div class="timeline-step-header">
-                    <strong>${step.step}</strong>
-                    <span>${step.date} ${step.time}</span>
-                </div>
-                <p>${step.description}</p>
-            `;
-            this.elements.timelineSteps.appendChild(li);
-        });
-    }
-    
-    /**
-     * Update the recipes list display
-     * @param {Object} recipes - Object containing all recipes
-     */
-    updateRecipesDisplay(recipes) {
-        const recipeKeys = Object.keys(recipes);
-        
-        // Show or hide no recipes message
-        if (recipeKeys.length === 0) {
-            this.elements.noRecipesMessage.style.display = 'block';
-            this.elements.recipesContainer.innerHTML = '';
-            return;
-        }
-        
-        this.elements.noRecipesMessage.style.display = 'none';
-        this.elements.recipesContainer.innerHTML = '';
-        
-        // Sort recipes by date (newest first)
-        recipeKeys.sort((a, b) => new Date(recipes[b].date) - new Date(recipes[a].date));
-        
-        // Create recipe cards
-        recipeKeys.forEach(id => {
-            const recipe = recipes[id];
-            const date = new Date(recipe.date).toLocaleDateString();
-            
-            const recipeCard = document.createElement('div');
-            recipeCard.className = 'recipe-card';
-            recipeCard.dataset.id = id;
-            
-            // Get recipe details
-            const settings = recipe.recipe.settings;
-            const hydration = Math.round(settings.hydration);
-            const flourTypes = settings.flourBlend.map(flour => this._getFlourName(flour.type)).join(', ');
-            
-            recipeCard.innerHTML = `
-                <div class="recipe-card-header">
-                    <span class="recipe-card-title">${recipe.name}</span>
-                    <span class="recipe-card-date">${date}</span>
-                </div>
-                <div class="recipe-card-details">
-                    <span class="recipe-card-detail">${Math.round(settings.doughWeight)}g</span>
-                    <span class="recipe-card-detail">${hydration}% hydration</span>
-                </div>
-                <div class="recipe-card-actions">
-                    <button class="load-recipe secondary" data-id="${id}">Load</button>
-                    <button class="delete-recipe secondary" data-id="${id}">Delete</button>
-                </div>
-            `;
-            
-            // Add event listeners to buttons
-            recipeCard.querySelector('.load-recipe').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._loadRecipe(id);
-            });
-            
-            recipeCard.querySelector('.delete-recipe').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._deleteRecipe(id);
-            });
-            
-            this.elements.recipesContainer.appendChild(recipeCard);
-        });
-    }
-    
-    /**
-     * Open the recipe modal
-     * @private
-     */
-    _openRecipeModal() {
-        // Clear previous values
-        this.elements.recipeName.value = '';
-        this.elements.recipeNotes.value = '';
-        this.state.editingRecipeId = null;
-        
-        // Show modal
-        this.elements.recipeModal.style.display = 'flex';
-    }
-    
-    /**
-     * Open the flour blend modal
-     * @private
-     */
-    _openFlourModal() {
-        // Clear previous values
-        this.elements.blendName.value = '';
-        
-        // Show modal
-        this.elements.flourModal.style.display = 'flex';
-    }
-    
-    /**
-     * Close all modals
-     * @private
-     */
-    _closeAllModals() {
-        this.elements.recipeModal.style.display = 'none';
-        this.elements.flourModal.style.display = 'none';
-    }
-    
-    /**
-     * Save the current recipe
-     * @private
-     */
-    _saveRecipe() {
-        const name = this.elements.recipeName.value.trim();
-        const notes = this.elements.recipeNotes.value.trim();
-        
-        if (!name) {
-            alert('Please enter a formula name');
-            return;
-        }
-        
-        // Close modal
-        this._closeAllModals();
-    }
-    
-    /**
-     * Save the current flour blend
-     * @private
-     */
-    _saveFlourBlend() {
-        const name = this.elements.blendName.value.trim();
-        
-        if (!name) {
-            alert('Please enter a blend name');
-            return;
-        }
-        
-        // Close modal
-        this._closeAllModals();
-    }
-    
-    /**
-     * Load a recipe
-     * @param {string} recipeId - The ID of the recipe to load
-     * @private
-     */
-    _loadRecipe(recipeId) {
-        // Implementation will be added in app.js
-    }
-    
-    /**
-     * Delete a recipe
-     * @param {string} recipeId - The ID of the recipe to delete
-     * @private
-     */
-    _deleteRecipe(recipeId) {
-        if (confirm('Are you sure you want to delete this formula?')) {
-            // Implementation will be added in app.js
-        }
-    }
-    
-    /**
-     * Copy the current recipe to clipboard
-     * @private
-     */
-    _copyRecipeToClipboard() {
-        // Implementation will be added in app.js
-    }
-    
-    /**
-     * Export recipes to a file
-     * @private
-     */
-    _exportRecipes() {
-        // Implementation will be added in app.js
-    }
-    
-    /**
-     * Import recipes from a file
-     * @param {Event} event - The file input change event
-     * @private
-     */
-    _importRecipes(event) {
-        // Implementation will be added in app.js
-    }
-    
-    // Update to show active anchor point
-    updateActiveAnchor(anchorPoint) {
-        if (this.elements.currentAnchor) {
-            this.elements.currentAnchor.textContent = anchorPoint.replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase());
-        }
-    }
-    
-    // Initialize temperature unit toggle
-    initTemperatureToggle() {
-        if (this.elements.tempUnitToggle) {
-            this.elements.tempUnitToggle.textContent = this.state.temperatureUnit;
-            
-            this.elements.tempUnitToggle.addEventListener('click', () => {
-                const currentTemp = parseFloat(this.elements.roomTemp.value) || 0;
-                
-                if (this.state.temperatureUnit === 'C') {
-                    // Convert to Fahrenheit
-                    this.state.temperatureUnit = 'F';
-                    this.elements.roomTemp.value = Math.round((currentTemp * 9/5) + 32);
-                } else {
-                    // Convert to Celsius
-                    this.state.temperatureUnit = 'C';
-                    this.elements.roomTemp.value = Math.round((currentTemp - 32) * 5/9);
-                }
-                
-                this.elements.tempUnitToggle.textContent = this.state.temperatureUnit;
-                
-                // Trigger temp change event
-                const event = new Event('input');
-                this.elements.roomTemp.dispatchEvent(event);
-            });
-        }
-    }
-    
-    // Get temperature in Celsius regardless of display unit
-    getTemperatureInCelsius() {
-        const displayedTemp = parseFloat(this.elements.roomTemp.value) || 0;
-        if (this.state.temperatureUnit === 'F') {
-            return (displayedTemp - 32) * 5/9;
-        }
-        return displayedTemp;
-    }
-    
-    // Initialize timeline toggle
-    initTimelineToggle() {
-        if (this.elements.timelineToggle && this.elements.timelineContent) {
-            this.elements.timelineToggle.addEventListener('click', () => {
-                this.state.timelineCollapsed = !this.state.timelineCollapsed;
-                this.elements.timelineContent.classList.toggle('collapsed', this.state.timelineCollapsed);
-                this.elements.timelineToggle.classList.toggle('collapsed', this.state.timelineCollapsed);
-                
-                // Update icon (assuming font-awesome or similar)
-                const iconElement = this.elements.timelineToggle.querySelector('i');
-                if (iconElement) {
-                    if (this.state.timelineCollapsed) {
-                        iconElement.className = 'fas fa-chevron-down';
-                    } else {
-                        iconElement.className = 'fas fa-chevron-up';
-                    }
-                }
-            });
-        }
-    }
-    
-    // Initialize input field highlighting for active anchor
-    initFieldHighlighting() {
-        const fieldGroups = {
-            'doughWeight': this.elements.doughWeightGroup,
-            'flourWeight': this.elements.flourWeightGroup,
-            'hydration': this.elements.hydrationGroup,
-            'starter': this.elements.starterGroup,
-            'salt': this.elements.saltGroup
-        };
-        
-        // Add event listeners to highlight active fields
-        Object.entries(fieldGroups).forEach(([key, group]) => {
-            if (!group) return;
-            const inputs = group.querySelectorAll('input');
-            
-            inputs.forEach(input => {
-                input.addEventListener('focus', () => {
-                    // Remove active class from all groups
-                    Object.values(fieldGroups).forEach(g => {
-                        if (g) g.classList.remove('input-field-active');
-                    });
-                    
-                    // Add active class to current group
-                    group.classList.add('input-field-active');
-                    
-                    // Set this field as the active anchor point
-                    if (key !== 'salt') { // Salt shouldn't be an anchor point
-                        sourdoughCalculator.updateSetting('anchorPoint', key);
-                        this.updateActiveAnchor(key);
-                        
-                        // Update highlight class on the actual group
-                        document.querySelectorAll('.input-group').forEach(g => {
-                            g.classList.remove('anchor-active');
-                        });
-                        group.classList.add('anchor-active');
-                    }
-                });
-            });
-        });
+
+        const when = document.createElement('span');
+        when.className = 'when';
+        when.innerHTML = `${timeFmt.format(step.start)}<span class="day">${dayFmt.format(step.start)}</span>`;
+
+        const what = document.createElement('span');
+        what.className = 'what';
+        const label = document.createElement('span');
+        label.className = 'step-label';
+        label.textContent = step.label;
+        const desc = document.createElement('span');
+        desc.className = 'step-desc';
+        desc.textContent = step.description;
+        what.append(label, document.createElement('br'), desc);
+
+        const dur = document.createElement('span');
+        dur.className = 'dur';
+        dur.textContent = step.minutes ? formatDuration(step.minutes) : '';
+
+        li.append(when, what, dur);
+        list.appendChild(li);
     }
 }
 
-// Export UI object
-const sourdoughUI = new SourdoughUI();
+/** Render timeline controls from env. uiState: { tempUnit: 'c'|'f' }. */
+export function renderTimelineControls(env, uiState) {
+    $('mode-start').classList.toggle('active', env.mode !== 'ready');
+    $('mode-ready').classList.toggle('active', env.mode === 'ready');
+    $('anchor-time-label').textContent = env.mode === 'ready' ? 'I want bread at' : 'I start at';
+    setInput($('anchor-time'), toLocalDatetimeValue(env.anchorTime));
+
+    const isF = uiState.tempUnit === 'f';
+    $('temp-unit-c').classList.toggle('active', !isF);
+    $('temp-unit-f').classList.toggle('active', isF);
+    $('room-temp-label').textContent = `Room temp (°${isF ? 'F' : 'C'})`;
+    const slider = $('room-temp-slider');
+    slider.min = isF ? 59 : 15;
+    slider.max = isF ? 90 : 32;
+    const shown = isF ? Math.round(cToF(env.roomTemp)) : env.roomTemp;
+    setInput($('room-temp'), shown);
+    setInput(slider, shown);
+
+    setInput($('retard-hours'), env.retardHours);
+    $('starter-fed').checked = env.starterFed;
+}
+
+export function toLocalDatetimeValue(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/* ---------- saved formulas ---------- */
+
+export function renderSavedList(entries, { onLoad, onDelete }) {
+    const grid = $('saved-grid');
+    grid.innerHTML = '';
+    if (!entries.length) {
+        const note = document.createElement('p');
+        note.className = 'empty-note';
+        note.textContent = 'Nothing saved yet. Dial in a formula and hit Save.';
+        grid.appendChild(note);
+        return;
+    }
+    for (const entry of entries) {
+        const card = document.createElement('div');
+        card.className = 'saved-card';
+
+        const title = document.createElement('h4');
+        title.textContent = entry.name;
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const s = entry.state;
+        meta.textContent = `${formatPct(s.hydration)}% hyd · ${formatPct(s.starter.pct)}% starter · ${Math.round(s.flourTotal)}g flour`;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const loadBtn = document.createElement('button');
+        loadBtn.textContent = 'Load';
+        loadBtn.className = 'primary';
+        loadBtn.addEventListener('click', () => onLoad(entry.id));
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn danger';
+        delBtn.title = 'Delete';
+        delBtn.innerHTML = '<svg><use href="#i-trash"/></svg>';
+        delBtn.addEventListener('click', () => onDelete(entry.id));
+        actions.append(loadBtn, delBtn);
+
+        card.append(title, meta);
+        if (entry.notes) {
+            const notes = document.createElement('p');
+            notes.className = 'subtle-note';
+            notes.textContent = entry.notes;
+            card.appendChild(notes);
+        }
+        card.appendChild(actions);
+        grid.appendChild(card);
+    }
+}
+
+/* ---------- misc ---------- */
+
+let toastTimer = null;
+
+export function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+export function setThemeIcon(isDark) {
+    $('theme-toggle').innerHTML = `<svg><use href="#i-${isDark ? 'sun' : 'moon'}"/></svg>`;
+}

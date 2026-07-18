@@ -633,3 +633,9 @@ footer a:hover { color: var(--primary-color); }
     .field:not(.print-keep) { display: none; }
     .stats-panel { grid-template-columns: repeat(4, 1fr); }
 }
+
+@media (max-width: 480px) {
+    header { flex-wrap: wrap; gap: 0.4rem; }
+    h1 { font-size: 1.3rem; letter-spacing: 0.1em; }
+    .tagline { font-size: 0.7rem; }
+}

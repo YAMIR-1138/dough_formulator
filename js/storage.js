@@ -1,262 +1,141 @@
 /**
- * Sourdough Storage Module
- * Handles saving, loading, exporting, and importing of recipes using localStorage
+ * storage.js - LocalStorage persistence for saved formulas.
+ * Migrates data from the previous app versions: both the old key names
+ * (sourdough_* → dough_formulator_*) and the old recipe shape
+ * ({doughWeight, flourWeight, starter:{amount,unit}, flourBlend:[{type,percentage}]})
+ * into the new canonical model State.
  */
+import { sanitizeState } from './model.js';
 
-class SourdoughStorage {
-    constructor() {
-        // Define both old and new storage keys for backwards compatibility
-        this.oldStorageKey = 'sourdough_recipes';
-        this.oldBlendStorageKey = 'sourdough_flour_blends';
-        
-        // New storage keys
-        this.storageKey = 'dough_formulator_recipes';
-        this.blendStorageKey = 'dough_formulator_flour_blends';
-        
-        // Migrate data from old keys if needed
-        this._migrateData();
+const KEY = 'dough_formulator_recipes_v2';
+const LEGACY_KEYS = ['dough_formulator_recipes', 'sourdough_recipes'];
+
+/** Convert an old-format saved recipe's settings into a model State. */
+function migrateLegacySettings(old) {
+    if (!old || typeof old !== 'object') return null;
+    const flourTotal = Number(old.flourWeight) || 1000;
+    const starterHyd = Number(old.starter?.hydration) || 100;
+    let starterPct = 20;
+    if (old.starter) {
+        starterPct = old.starter.unit === 'grams'
+            ? (Number(old.starter.amount) / flourTotal) * 100
+            : Number(old.starter.amount);
     }
-    
-    /**
-     * Migrate data from old storage keys to new ones
-     * @private
-     */
-    _migrateData() {
-        // Check if old data exists and new data doesn't
-        const oldRecipes = localStorage.getItem(this.oldStorageKey);
-        const oldBlends = localStorage.getItem(this.oldBlendStorageKey);
-        
-        // Migrate recipes if needed
-        if (oldRecipes && !localStorage.getItem(this.storageKey)) {
-            localStorage.setItem(this.storageKey, oldRecipes);
-        }
-        
-        // Migrate blends if needed
-        if (oldBlends && !localStorage.getItem(this.blendStorageKey)) {
-            localStorage.setItem(this.blendStorageKey, oldBlends);
-        }
-    }
-    
-    /**
-     * Save a recipe to localStorage
-     * @param {Object} recipe - The recipe to save
-     * @param {string} name - The recipe name
-     * @param {string} notes - Optional recipe notes
-     * @returns {string} The ID of the saved recipe
-     */
-    saveRecipe(recipe, name, notes = '') {
-        const recipes = this.getAllRecipes();
-        const recipeId = 'recipe_' + Date.now();
-        
-        recipes[recipeId] = {
-            id: recipeId,
-            name: name,
-            notes: notes,
-            date: new Date().toISOString(),
-            recipe: recipe
-        };
-        
-        localStorage.setItem(this.storageKey, JSON.stringify(recipes));
-        return recipeId;
-    }
-    
-    /**
-     * Update an existing recipe
-     * @param {string} recipeId - The recipe ID to update
-     * @param {Object} recipe - The updated recipe
-     * @param {string} name - The updated name
-     * @param {string} notes - Updated notes
-     * @returns {boolean} Success status
-     */
-    updateRecipe(recipeId, recipe, name, notes = '') {
-        const recipes = this.getAllRecipes();
-        
-        // Check if recipe exists
-        if (!recipes[recipeId]) {
-            return false;
-        }
-        
-        // Update recipe
-        recipes[recipeId] = {
-            ...recipes[recipeId],
-            name: name,
-            notes: notes,
-            date: new Date().toISOString(), // Update date
-            recipe: recipe
-        };
-        
-        // Save to localStorage
-        localStorage.setItem(this.storageKey, JSON.stringify(recipes));
-        
-        return true;
-    }
-    
-    /**
-     * Load a recipe by ID
-     * @param {string} recipeId - The ID of the recipe to load
-     * @returns {Object|null} The recipe or null if not found
-     */
-    loadRecipe(recipeId) {
-        const recipes = this.getAllRecipes();
-        return recipes[recipeId] || null;
-    }
-    
-    /**
-     * Delete a recipe by ID
-     * @param {string} recipeId - The ID of the recipe to delete
-     * @returns {boolean} Success status
-     */
-    deleteRecipe(recipeId) {
-        const recipes = this.getAllRecipes();
-        
-        if (recipes[recipeId]) {
-            delete recipes[recipeId];
-            localStorage.setItem(this.storageKey, JSON.stringify(recipes));
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
-     * Get all saved recipes
-     * @returns {Object} Object containing all recipes
-     */
-    getAllRecipes() {
-        // Try to get recipes from new storage key first
-        let recipesJson = localStorage.getItem(this.storageKey);
-        
-        // If not found, try old key as fallback
-        if (!recipesJson) {
-            recipesJson = localStorage.getItem(this.oldStorageKey);
-            // If found in old key, migrate it
-            if (recipesJson) {
-                localStorage.setItem(this.storageKey, recipesJson);
-            }
-        }
-        
-        return recipesJson ? JSON.parse(recipesJson) : {};
-    }
-    
-    /**
-     * Export all recipes to a JSON file
-     * @returns {string} JSON string of all recipes
-     */
-    exportRecipes() {
-        const recipes = this.getAllRecipes();
-        return JSON.stringify(recipes, null, 2);
-    }
-    
-    /**
-     * Import recipes from a JSON file
-     * @param {string} jsonData - JSON string containing recipes
-     * @param {boolean} merge - Whether to merge with existing recipes or replace
-     * @returns {number} Number of recipes imported
-     */
-    importRecipes(jsonData, merge = true) {
-        try {
-            // Parse the JSON data
-            const importedRecipes = JSON.parse(jsonData);
-            
-            // Validate the format
-            if (typeof importedRecipes !== 'object') {
-                throw new Error('Invalid recipe format');
-            }
-            
-            // Get existing recipes if merging
-            let recipes = merge ? this.getAllRecipes() : {};
-            
-            // Add imported recipes, overwriting any with same ID
-            let count = 0;
-            for (const [id, recipe] of Object.entries(importedRecipes)) {
-                // Ensure each recipe has required fields
-                if (!recipe.name || !recipe.recipe) {
-                    console.warn(`Skipping invalid recipe: ${id}`);
-                    continue;
-                }
-                
-                // Add or overwrite recipe
-                recipes[id] = recipe;
-                count++;
-            }
-            
-            // Save to localStorage
-            localStorage.setItem(this.storageKey, JSON.stringify(recipes));
-            
-            return count;
-        } catch (error) {
-            console.error('Error importing recipes:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Save a flour blend to localStorage
-     * @param {Array} blend - The flour blend to save
-     * @param {string} name - The blend name
-     * @returns {string} The ID of the saved blend
-     */
-    saveFlourBlend(blend, name) {
-        const blends = this.getAllFlourBlends();
-        const blendId = 'blend_' + Date.now();
-        
-        blends[blendId] = {
-            id: blendId,
-            name: name,
-            date: new Date().toISOString(),
-            blend: blend
-        };
-        
-        localStorage.setItem(this.blendStorageKey, JSON.stringify(blends));
-        return blendId;
-    }
-    
-    /**
-     * Get all saved flour blends
-     * @returns {Object} Object containing all flour blends
-     */
-    getAllFlourBlends() {
-        // Try to get blends from new storage key first
-        let blendsJson = localStorage.getItem(this.blendStorageKey);
-        
-        // If not found, try old key as fallback
-        if (!blendsJson) {
-            blendsJson = localStorage.getItem(this.oldBlendStorageKey);
-            // If found in old key, migrate it
-            if (blendsJson) {
-                localStorage.setItem(this.blendStorageKey, blendsJson);
-            }
-        }
-        
-        return blendsJson ? JSON.parse(blendsJson) : {};
-    }
-    
-    /**
-     * Delete a flour blend by ID
-     * @param {string} blendId - The ID of the blend to delete
-     * @returns {boolean} Success status
-     */
-    deleteFlourBlend(blendId) {
-        const blends = this.getAllFlourBlends();
-        
-        if (blends[blendId]) {
-            delete blends[blendId];
-            localStorage.setItem(this.blendStorageKey, JSON.stringify(blends));
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
-     * Clear all saved data (recipes and blends)
-     * Use with caution!
-     */
-    clearAllData() {
-        localStorage.removeItem(this.storageKey);
-        localStorage.removeItem(this.blendStorageKey);
+    return sanitizeState({
+        flourTotal,
+        hydration: Number(old.hydration),
+        saltPct: Number(old.salt),
+        starter: { pct: starterPct, hydration: starterHyd },
+        flours: Array.isArray(old.flourBlend)
+            ? old.flourBlend.map(f => ({ key: f.type, pct: Number(f.percentage) }))
+            : [],
+    });
+}
+
+function readStore() {
+    try {
+        const json = localStorage.getItem(KEY);
+        return json ? JSON.parse(json) : null;
+    } catch {
+        return null;
     }
 }
 
-// Export storage object
-const sourdoughStorage = new SourdoughStorage();
+function writeStore(store) {
+    localStorage.setItem(KEY, JSON.stringify(store));
+}
+
+/** One-time migration of legacy saves into the v2 store. */
+function migrate() {
+    const store = {};
+    for (const legacyKey of LEGACY_KEYS) {
+        try {
+            const json = localStorage.getItem(legacyKey);
+            if (!json) continue;
+            const legacy = JSON.parse(json);
+            for (const [id, entry] of Object.entries(legacy)) {
+                if (store[id]) continue;
+                // Old app saved { name, notes, date, recipe: { settings, recipe, timeline } }
+                const state = migrateLegacySettings(entry.recipe?.settings || entry.settings || entry.recipe);
+                if (!state) continue;
+                store[id] = {
+                    id,
+                    name: entry.name || 'Migrated formula',
+                    notes: entry.notes || '',
+                    date: entry.date || new Date().toISOString(),
+                    state,
+                };
+            }
+        } catch {
+            // Ignore unparseable legacy data
+        }
+    }
+    writeStore(store);
+    return store;
+}
+
+function getStore() {
+    return readStore() ?? migrate();
+}
+
+/** List all saved formulas, newest first. */
+export function listFormulas() {
+    return Object.values(getStore())
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+/** Save a formula (canonical State). Returns its id. */
+export function saveFormula(state, name, notes = '') {
+    const store = getStore();
+    const id = 'f_' + Date.now().toString(36) + '_' + Object.keys(store).length;
+    store[id] = { id, name, notes, date: new Date().toISOString(), state };
+    writeStore(store);
+    return id;
+}
+
+export function loadFormula(id) {
+    const entry = getStore()[id];
+    if (!entry) return null;
+    const state = sanitizeState(entry.state);
+    return state ? { ...entry, state } : null;
+}
+
+export function deleteFormula(id) {
+    const store = getStore();
+    if (!store[id]) return false;
+    delete store[id];
+    writeStore(store);
+    return true;
+}
+
+/** Export all formulas as a pretty JSON string. */
+export function exportFormulas() {
+    return JSON.stringify(getStore(), null, 2);
+}
+
+/**
+ * Import formulas from JSON. merge=false replaces everything.
+ * Returns the number imported; throws on unparseable input.
+ */
+export function importFormulas(jsonData, merge = true) {
+    const imported = JSON.parse(jsonData);
+    if (!imported || typeof imported !== 'object') {
+        throw new Error('Invalid formula file');
+    }
+    const store = merge ? getStore() : {};
+    let count = 0;
+    for (const [id, entry] of Object.entries(imported)) {
+        const state = sanitizeState(entry?.state) || migrateLegacySettings(entry?.recipe?.settings || entry?.recipe);
+        if (!state || !entry.name) continue;
+        store[id] = {
+            id,
+            name: entry.name,
+            notes: entry.notes || '',
+            date: entry.date || new Date().toISOString(),
+            state,
+        };
+        count++;
+    }
+    writeStore(store);
+    return count;
+}

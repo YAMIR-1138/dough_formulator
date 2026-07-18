@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="THE LAB - four experiments in what a sourdough formula could feel like.">
+    <title>THE LAB - Dough Formulator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+    <div class="page">
+        <nav id="lab-nav"></nav>
+
+        <header class="hub-masthead">
+            <span class="smallcaps over">dough_formulator presents</span>
+            <h1>The Lab</h1>
+            <p class="dek">Four experiments in what a formula could feel like. Same math, different instruments.</p>
+        </header>
+
+        <ul class="toc">
+            <li>
+                <a href="recipe.html">
+                    <span class="roman">Ⅰ</span>
+                    <span>
+                        <h3>The Living Recipe</h3>
+                        <p>Your formula written as prose you can touch. Tap any number in the sentence and the whole document - ingredients, schedule, everything - rewrites itself around you.</p>
+                    </span>
+                    <svg class="vignette" viewBox="0 0 84 64" aria-hidden="true">
+                        <line x1="8" y1="14" x2="76" y2="14"/>
+                        <line x1="8" y1="26" x2="60" y2="26"/>
+                        <rect x="30" y="21" width="14" height="9" rx="2"/>
+                        <line x1="8" y1="38" x2="70" y2="38"/>
+                        <line x1="8" y1="50" x2="48" y2="50"/>
+                    </svg>
+                </a>
+            </li>
+            <li>
+                <a href="canvas.html">
+                    <span class="roman">Ⅱ</span>
+                    <span>
+                        <h3>Dough Canvas</h3>
+                        <p>The dough as a picture, not a spreadsheet. Ingredients stack in a glass jar; drag the layers to change the ratios, pull the surface to scale the batch.</p>
+                    </span>
+                    <svg class="vignette" viewBox="0 0 84 64" aria-hidden="true">
+                        <path d="M30 8 h24 v6 l4 4 v38 h-32 v-38 l4 -4 z"/>
+                        <line x1="26" y1="30" x2="58" y2="30"/>
+                        <line x1="26" y1="42" x2="58" y2="42"/>
+                    </svg>
+                </a>
+            </li>
+            <li>
+                <a href="control.html">
+                    <span class="roman">Ⅲ</span>
+                    <span>
+                        <h3>Mission Control</h3>
+                        <p>Built around <em>when</em>, not how much. Your bake is a ribbon of time - drag the bake to Sunday morning and the schedule reflows; warm the kitchen and watch bulk shrink.</p>
+                    </span>
+                    <svg class="vignette" viewBox="0 0 84 64" aria-hidden="true">
+                        <line x1="6" y1="32" x2="78" y2="32"/>
+                        <rect x="12" y="25" width="12" height="14" rx="2"/>
+                        <rect x="30" y="25" width="20" height="14" rx="2"/>
+                        <rect x="58" y="25" width="10" height="14" rx="2"/>
+                        <line x1="44" y1="12" x2="44" y2="52"/>
+                    </svg>
+                </a>
+            </li>
+            <li>
+                <a href="dial.html">
+                    <span class="roman">Ⅳ</span>
+                    <span>
+                        <h3>Pocket Dial</h3>
+                        <p>One decision at a time, one big satisfying dial per screen. Swipe from batch to hydration to schedule and end on a bake card that stays with you all day.</p>
+                    </span>
+                    <svg class="vignette" viewBox="0 0 84 64" aria-hidden="true">
+                        <circle cx="42" cy="34" r="22"/>
+                        <line x1="42" y1="34" x2="54" y2="20"/>
+                        <circle cx="42" cy="34" r="2.5"/>
+                    </svg>
+                </a>
+            </li>
+        </ul>
+
+        <p class="hub-footer"><a id="classic-link" href="../index.html">Return to the classic formulator →</a></p>
+    </div>
+
+    <script type="module">
+        import { renderSwitcher } from './lab-common.js';
+        renderSwitcher(document.getElementById('lab-nav'), 'hub');
+        // Carry any formula hash through every link on this page
+        const carry = () => {
+            for (const a of document.querySelectorAll('.toc a, #classic-link')) {
+                a.href = a.getAttribute('href').split('#')[0] + location.hash;
+            }
+        };
+        carry();
+        addEventListener('hashchange', carry);
+    </script>
+</body>
+</html>

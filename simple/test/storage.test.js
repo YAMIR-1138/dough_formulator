@@ -31,9 +31,9 @@ test('save, get, update, list, remove', () => {
 test('list is newest first', () => {
     const store = new RecipeStore();
     const a = store.save({ state: {} }, 'A');
-    const all = JSON.parse(localStorage.getItem('dough_formulator_recipes_v2'));
+    const all = JSON.parse(localStorage.getItem('dough_formulator_simple_recipes'));
     all[a].date = '2020-01-01T00:00:00.000Z';
-    localStorage.setItem('dough_formulator_recipes_v2', JSON.stringify(all));
+    localStorage.setItem('dough_formulator_simple_recipes', JSON.stringify(all));
     store.save({ state: {} }, 'B');
     assert.deepEqual(store.list().map((r) => r.name), ['B', 'A']);
 });

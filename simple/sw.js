@@ -1,7 +1,7 @@
 /* DOUGH_FORMULATOR service worker: cache-first with background refresh, so the
  * app works offline and picks up new versions on the next load. */
 
-const CACHE = 'dough-formulator-v3';
+const CACHE = 'dough-formulator-simple-v1';
 const ASSETS = [
     './',
     './index.html',

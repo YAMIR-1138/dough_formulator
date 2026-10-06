@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="The Living Recipe - a sourdough formula written as prose you can touch.">
+    <title>Ⅰ The Living Recipe - THE LAB</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+    <div class="page">
+        <nav id="lab-nav"></nav>
+
+        <header>
+            <span class="smallcaps">experiment Ⅰ</span>
+            <h2>The Living Recipe</h2>
+            <p class="caption no-print">Everything underlined is yours to change. Tap a value; the document rewrites itself.</p>
+        </header>
+
+        <article class="doc" id="doc">
+            <section id="sec-loaf">
+                <span class="smallcaps section-head">The loaf</span>
+                <p class="prose" id="p-loaf"></p>
+                <p class="prose" id="p-flour"></p>
+                <p class="prose" id="p-conditions"></p>
+            </section>
+
+            <section id="sec-ingredients">
+                <span class="smallcaps section-head">On the scale</span>
+                <p class="prose secondary" id="p-ingredients"></p>
+                <p class="prose secondary" id="p-perloaf"></p>
+            </section>
+
+            <section id="sec-schedule">
+                <span class="smallcaps section-head">The schedule</span>
+                <div id="schedule"></div>
+                <p class="footnote no-print">
+                    Times follow your kitchen temperature and starter amount.
+                    <a href="#" id="print-link">Print this card</a> - it already is one.
+                </p>
+            </section>
+        </article>
+    </div>
+
+    <script type="module" src="recipe.js"></script>
+</body>
+</html>

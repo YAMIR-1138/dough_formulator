@@ -1,218 +1,236 @@
 /**
- * DOUGH_FORMULATOR - Simple Sourdough Calculator
- * Clean baker's math calculations without complex lock systems
+ * DOUGH_FORMULATOR - Calculator
+ *
+ * Conventions (the way home-baking recipes are usually written):
+ *   - `flour`   is the flour you weigh out and add. It does NOT include starter flour.
+ *   - `starter` is grams of starter at `starterHydration`.
+ *   - Hydration and salt % are computed on TRUE total flour (added flour + starter
+ *     flour), so the hydration you set is the real hydration of the dough.
+ *
+ * Example: 700g flour, 75% hydration, 150g starter @ 100%, 2.5% salt
+ *   starter flour 75g, starter water 75g  ->  total flour 775g
+ *   total water 581.25g                   ->  water to add 506g
+ *   salt 19.4g                            ->  total dough 1375g
  */
+(function (root) {
+    'use strict';
 
-class DoughCalculator {
-    constructor() {
-        this.state = {
-            // Core inputs
-            totalFlour: 700,           // Total flour in grams
-            hydration: 75,             // Hydration percentage
-            starter: 150,              // Starter amount in grams
-            starterHydration: 100,     // Starter hydration percentage
-            saltPct: 2.0,              // Salt as percentage of flour
+    const DEFAULTS = Object.freeze({
+        flour: 700,
+        hydration: 75,
+        starter: 150,
+        starterHydration: 100,
+        saltPct: 2,
+        useTwoFlours: false,
+        mainFlourPct: 80,
+        numLoaves: 2,
+        keepLoafWeight: false,
+        bakeTemp1: 450,
+        bakeTime1: 20,
+        bakeTemp2: 425,
+        bakeTime2: 25,
+        tempUnit: 'F'
+    });
 
-            // Flour blend
-            useTwoFlours: false,
-            mainFlourPct: 80,          // Main flour percentage (when using 2 flours)
+    // Hard limits for typed values (sliders use a narrower, friendlier range)
+    const LIMITS = {
+        flour: [10, 50000],
+        hydration: [20, 250],
+        starter: [0, 50000],
+        starterHydration: [20, 400],
+        saltPct: [0, 10],
+        mainFlourPct: [0, 100],
+        numLoaves: [1, 200],
+        bakeTime1: [0, 600],
+        bakeTime2: [0, 600]
+    };
 
-            // Loaves
-            numLoaves: 2,
+    const TEMP_LIMITS = { F: [150, 600], C: [60, 320] };
 
-            // Baking settings (in Fahrenheit by default)
-            bakeTemp1: 450,
-            bakeTime1: 20,
-            bakeTemp2: 425,
-            bakeTime2: 25,
-            tempUnit: 'F'              // 'F' or 'C'
-        };
+    // Decimal places each input is stored with
+    const DECIMALS = {
+        flour: 0, hydration: 1, starter: 0, starterHydration: 0, saltPct: 1,
+        mainFlourPct: 0, numLoaves: 0, bakeTemp1: 0, bakeTime1: 0, bakeTemp2: 0, bakeTime2: 0
+    };
 
-        this.results = {};
-        this.calculate();
+    function round(value, decimals = 0) {
+        const f = Math.pow(10, decimals);
+        return Math.round(value * f) / f;
     }
 
-    /**
-     * Main calculation - computes all derived values
-     */
-    calculate() {
-        const s = this.state;
-        const r = this.results;
-
-        // Starter components (based on starter hydration)
-        // For 100% hydration starter: 50% flour, 50% water
-        // Formula: starterFlour = starter / (1 + starterHydration/100)
-        r.starterFlour = s.starter / (1 + s.starterHydration / 100);
-        r.starterWater = s.starter - r.starterFlour;
-
-        // Total water needed for target hydration
-        r.totalWater = s.totalFlour * (s.hydration / 100);
-
-        // Water to add (total water minus what's in starter)
-        r.waterToAdd = r.totalWater - r.starterWater;
-
-        // Flour to add (total flour minus what's in starter)
-        r.flourToAdd = s.totalFlour - r.starterFlour;
-
-        // Salt amount
-        r.salt = s.totalFlour * (s.saltPct / 100);
-
-        // Total dough weight
-        r.totalDough = s.totalFlour + r.totalWater + r.salt;
-
-        // Per-loaf weight
-        r.loafWeight = r.totalDough / s.numLoaves;
-
-        // Starter as percentage of flour
-        r.starterFlourPct = (s.starter / s.totalFlour) * 100;
-
-        // Starter as percentage of total dough
-        r.starterTotalPct = (s.starter / r.totalDough) * 100;
-
-        // Flour breakdown (when using 2 flours)
-        if (s.useTwoFlours) {
-            r.mainFlour = r.flourToAdd * (s.mainFlourPct / 100);
-            r.secondFlour = r.flourToAdd - r.mainFlour;
-        } else {
-            r.mainFlour = r.flourToAdd;
-            r.secondFlour = 0;
-        }
-
-        // Round all values for display
-        r.starterFlour = this._round(r.starterFlour, 1);
-        r.starterWater = this._round(r.starterWater, 1);
-        r.totalWater = this._round(r.totalWater, 1);
-        r.waterToAdd = this._round(r.waterToAdd, 1);
-        r.flourToAdd = this._round(r.flourToAdd, 1);
-        r.salt = this._round(r.salt, 1);
-        r.totalDough = Math.round(r.totalDough);
-        r.loafWeight = Math.round(r.loafWeight);
-        r.starterFlourPct = this._round(r.starterFlourPct, 1);
-        r.starterTotalPct = this._round(r.starterTotalPct, 1);
-        r.mainFlour = Math.round(r.mainFlour);
-        r.secondFlour = Math.round(r.secondFlour);
-
-        return r;
+    function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
     }
 
-    /**
-     * Update a single value and recalculate
-     */
-    update(key, value) {
-        if (key in this.state) {
-            this.state[key] = value;
+    class DoughCalculator {
+        constructor() {
+            this.state = { ...DEFAULTS };
+            this.results = {};
             this.calculate();
         }
-        return this.results;
-    }
 
-    /**
-     * Update multiple values at once
-     */
-    updateMultiple(updates) {
-        for (const [key, value] of Object.entries(updates)) {
-            if (key in this.state) {
-                this.state[key] = value;
-            }
-        }
-        this.calculate();
-        return this.results;
-    }
+        /** Compute every derived value from the current state. */
+        calculate() {
+            const s = this.state;
 
-    /**
-     * Get current state
-     */
-    getState() {
-        return { ...this.state };
-    }
+            const starterFlour = s.starter / (1 + s.starterHydration / 100);
+            const starterWater = s.starter - starterFlour;
+            const totalFlour = s.flour + starterFlour;
+            const totalWater = totalFlour * (s.hydration / 100);
+            const waterToAdd = totalWater - starterWater;
+            const salt = totalFlour * (s.saltPct / 100);
 
-    /**
-     * Get current results
-     */
-    getResults() {
-        return { ...this.results };
-    }
-
-    /**
-     * Load a saved recipe
-     */
-    loadRecipe(recipe) {
-        if (recipe && recipe.state) {
-            // Merge with defaults to handle missing fields
-            this.state = {
-                ...this.state,
-                ...recipe.state
+            const r = {
+                flour: round(s.flour),
+                water: round(waterToAdd),
+                starter: round(s.starter),
+                salt: round(salt, 1),
+                starterFlour: round(starterFlour),
+                starterWater: round(starterWater),
+                totalFlour: round(totalFlour),
+                totalWater: round(totalWater),
+                // The starter alone brings more water than the target hydration allows
+                starterTooWet: waterToAdd < 0
             };
-            this.calculate();
+
+            // Total is built from the displayed amounts so the ingredient list adds up on screen
+            r.totalDough = round(r.flour + r.water + r.starter + r.salt);
+            r.loafWeight = round(r.totalDough / s.numLoaves);
+
+            r.starterPctOfFlour = s.flour > 0 ? round((s.starter / s.flour) * 100, 1) : 0;
+            r.starterPctOfDough = r.totalDough > 0 ? round((s.starter / r.totalDough) * 100, 1) : 0;
+
+            if (s.useTwoFlours) {
+                r.mainFlour = round(s.flour * (s.mainFlourPct / 100));
+                r.secondFlour = r.flour - r.mainFlour;
+            } else {
+                r.mainFlour = r.flour;
+                r.secondFlour = 0;
+            }
+
+            this.results = r;
+            return r;
         }
-        return this.results;
-    }
 
-    /**
-     * Export current recipe for saving
-     */
-    exportRecipe() {
-        return {
-            state: { ...this.state },
-            results: { ...this.results }
-        };
-    }
+        /** Allowed range for a key (temperature limits depend on the unit). */
+        limits(key) {
+            if (key === 'bakeTemp1' || key === 'bakeTemp2') return TEMP_LIMITS[this.state.tempUnit];
+            return LIMITS[key] || [-Infinity, Infinity];
+        }
 
-    /**
-     * Convert temperature between F and C
-     */
-    convertTemp(temp, toUnit) {
-        if (toUnit === 'C') {
-            return Math.round((temp - 32) * 5 / 9);
-        } else {
-            return Math.round(temp * 9 / 5 + 32);
+        /** Set one input. Values are validated, clamped and rounded; junk is ignored. */
+        set(key, value) {
+            if (!(key in DEFAULTS)) return this.results;
+
+            if (key === 'tempUnit') {
+                if (value === 'F' || value === 'C') this.state.tempUnit = value;
+            } else if (typeof DEFAULTS[key] === 'boolean') {
+                this.state[key] = Boolean(value);
+            } else {
+                const isNumberLike = typeof value === 'number' ||
+                    (typeof value === 'string' && value.trim() !== '');
+                const n = isNumberLike ? Number(value) : NaN;
+                if (!Number.isFinite(n)) return this.results;
+                const [min, max] = this.limits(key);
+                this.state[key] = round(clamp(n, min, max), DECIMALS[key] || 0);
+            }
+            return this.calculate();
+        }
+
+        /**
+         * Scale the recipe (flour and starter together, so every ratio is preserved)
+         * to hit a target total dough weight. Lands within 1g of the target.
+         */
+        setTotalDough(target) {
+            target = Number(target);
+            if (!Number.isFinite(target) || target <= 0 || this.results.totalDough <= 0) return this.results;
+
+            const ratio = target / this.results.totalDough;
+            this.set('flour', this.state.flour * ratio);
+            this.set('starter', this.state.starter * ratio);
+
+            // Rounding to whole grams can leave us a gram or two off; nudge flour to close the gap.
+            // Each gram of flour adds (1 + hydration + salt) grams of dough.
+            for (let i = 0; i < 3; i++) {
+                const diff = target - this.results.totalDough;
+                if (Math.abs(diff) <= 1) break;
+                const perGram = 1 + this.state.hydration / 100 + this.state.saltPct / 100;
+                const adjust = Math.round(diff / perGram);
+                if (adjust === 0) break;
+                this.set('flour', this.state.flour + adjust);
+            }
+            return this.results;
+        }
+
+        /** Scale the recipe so each loaf weighs `grams`. */
+        setLoafWeight(grams) {
+            grams = Number(grams);
+            if (!Number.isFinite(grams) || grams <= 0) return this.results;
+            return this.setTotalDough(grams * this.state.numLoaves);
+        }
+
+        /** Change the loaf count. With keepLoafWeight on, the recipe scales to keep each loaf the same. */
+        setNumLoaves(n) {
+            const loafWeight = this.results.loafWeight;
+            this.set('numLoaves', n);
+            if (this.state.keepLoafWeight) this.setTotalDough(loafWeight * this.state.numLoaves);
+            return this.results;
+        }
+
+        /** Switch between °F and °C, converting both bake temperatures (snapped to 5°). */
+        toggleTempUnit() {
+            const to = this.state.tempUnit === 'F' ? 'C' : 'F';
+            const convert = (t) => (to === 'C' ? (t - 32) * 5 / 9 : t * 9 / 5 + 32);
+            const snap = (t) => Math.round(t / 5) * 5;
+            const t1 = this.state.bakeTemp1;
+            const t2 = this.state.bakeTemp2;
+            this.state.tempUnit = to;
+            this.set('bakeTemp1', snap(convert(t1)));
+            this.set('bakeTemp2', snap(convert(t2)));
+            return to;
+        }
+
+        /** Load a saved recipe (accepts `{ state }` or a bare state object). Missing/invalid fields fall back to defaults. */
+        load(data) {
+            const src = data && typeof data === 'object' && data.state && typeof data.state === 'object'
+                ? data.state
+                : (data && typeof data === 'object' ? data : {});
+
+            this.state = { ...DEFAULTS };
+            if (src.tempUnit === 'C' || src.tempUnit === 'F') this.state.tempUnit = src.tempUnit;
+            for (const key of Object.keys(DEFAULTS)) {
+                if (key === 'tempUnit' || src[key] === undefined) continue;
+                this.set(key, src[key]);
+            }
+            return this.calculate();
+        }
+
+        reset() {
+            this.state = { ...DEFAULTS };
+            return this.calculate();
+        }
+
+        getState() {
+            return { ...this.state };
+        }
+
+        getResults() {
+            return { ...this.results };
+        }
+
+        /** Snapshot for saving. */
+        exportRecipe() {
+            return { state: { ...this.state }, results: { ...this.results } };
         }
     }
 
-    /**
-     * Toggle temperature unit and convert all temps
-     */
-    toggleTempUnit() {
-        const newUnit = this.state.tempUnit === 'F' ? 'C' : 'F';
+    DoughCalculator.DEFAULTS = DEFAULTS;
+    DoughCalculator.LIMITS = LIMITS;
+    DoughCalculator.TEMP_LIMITS = TEMP_LIMITS;
 
-        this.state.bakeTemp1 = this.convertTemp(this.state.bakeTemp1, newUnit);
-        this.state.bakeTemp2 = this.convertTemp(this.state.bakeTemp2, newUnit);
-        this.state.tempUnit = newUnit;
-
-        return newUnit;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = DoughCalculator;
+    } else {
+        root.DoughCalculator = DoughCalculator;
     }
-
-    /**
-     * Reset to defaults
-     */
-    reset() {
-        this.state = {
-            totalFlour: 700,
-            hydration: 75,
-            starter: 150,
-            starterHydration: 100,
-            saltPct: 2.0,
-            useTwoFlours: false,
-            mainFlourPct: 80,
-            numLoaves: 2,
-            bakeTemp1: 450,
-            bakeTime1: 20,
-            bakeTemp2: 425,
-            bakeTime2: 25,
-            tempUnit: 'F'
-        };
-        this.calculate();
-        return this.results;
-    }
-
-    /**
-     * Round to specified decimal places
-     */
-    _round(value, decimals) {
-        const factor = Math.pow(10, decimals);
-        return Math.round(value * factor) / factor;
-    }
-}
-
-// Create global instance
-const calculator = new DoughCalculator();
+})(typeof window !== 'undefined' ? window : globalThis);

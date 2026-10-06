@@ -88,13 +88,24 @@ it comes with you.
   rotary dial with editorial "wisdom" captions, ending on a bake card
   with your next step and an optional screen wake-lock.
 
+## 📱 SIMPLE - the phone calculator
+
+[`/simple/`](https://yamir-1138.github.io/dough_formulator/simple/) is a
+stripped-down, phone-first calculator for the kitchen counter: big sliders,
+hold-to-repeat **+/−** buttons, tap any number to type it, type a dough or
+loaf weight and the recipe scales to match, two-stage bake temps/times,
+and a live summary bar. Installable (Add to Home Screen) and fully offline.
+It has its own small engine and its own saved-recipe store - see
+[`simple/README.md`](simple/README.md).
+
 ## 🧪 Tests
 
 The math engine, fermentation model, and share codec are pure ES modules
 with a framework-free test suite:
 
 ```
-node tests/run.js      # or open tests.html in a browser
+node tests/run.js        # or open tests.html in a browser
+node --test 'simple/test/*.test.js'   # the SIMPLE calculator's tests (Node 18+)
 ```
 
 ## 🏗️ Architecture

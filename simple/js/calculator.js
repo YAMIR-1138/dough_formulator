@@ -25,11 +25,11 @@
         mainFlourPct: 80,
         numLoaves: 2,
         keepLoafWeight: false,
-        bakeTemp1: 450,
+        bakeTemp1: 230,
         bakeTime1: 20,
-        bakeTemp2: 425,
+        bakeTemp2: 220,
         bakeTime2: 25,
-        tempUnit: 'F'
+        tempUnit: 'C'
     });
 
     // Hard limits for typed values (sliders use a narrower, friendlier range)

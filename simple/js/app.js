@@ -13,6 +13,7 @@
 
     const DRAFT_KEY = 'dough_formulator_simple_draft';
     const THEME_KEY = 'dough_formulator_theme'; // shared with the full app so the theme follows you
+    const TEMP_UNIT_KEY = 'dough_formulator_simple_temp_unit'; // 'C' (default) or 'F'
 
     /** Slider/stepper fields: element id -> calculator key + display format */
     const FIELDS = {
@@ -174,9 +175,20 @@
             commit();
         });
         $('temp-unit-btn').addEventListener('click', () => {
-            calculator.toggleTempUnit();
+            const unit = calculator.toggleTempUnit();
+            try { localStorage.setItem(TEMP_UNIT_KEY, unit); } catch (e) { /* ignore */ }
             commit();
         });
+    }
+
+    /** The unit the user wants temperatures shown in. Metric unless they switched. */
+    function preferredTempUnit() {
+        try { return localStorage.getItem(TEMP_UNIT_KEY) === 'F' ? 'F' : 'C'; } catch (e) { return 'C'; }
+    }
+
+    /** Convert the calculator's temperatures to the preferred unit if a loaded recipe used the other one. */
+    function applyPreferredTempUnit() {
+        if (calculator.getState().tempUnit !== preferredTempUnit()) calculator.toggleTempUnit();
     }
 
     function initRecipeMeta() {
@@ -297,6 +309,7 @@
     function newRecipe() {
         if (!confirm('Start a new recipe? Current values will reset to defaults.')) return;
         calculator.reset();
+        applyPreferredTempUnit();
         $('recipe-name').value = 'My Sourdough';
         $('recipe-notes').value = '';
         openRecipe = { id: null, snapshot: null };
@@ -424,6 +437,7 @@
             return;
         }
         calculator.load(rec.data);
+        applyPreferredTempUnit();
         $('recipe-name').value = rec.name || 'Untitled';
         $('recipe-notes').value = rec.notes || '';
         openRecipe = { id, snapshot: snapshotOfSaved(rec) };
@@ -570,6 +584,7 @@
         if (!draft || typeof draft !== 'object') return;
 
         if (draft.data) calculator.load(draft.data);
+        applyPreferredTempUnit();
         if (typeof draft.name === 'string') $('recipe-name').value = draft.name;
         if (typeof draft.notes === 'string') $('recipe-notes').value = draft.notes;
 

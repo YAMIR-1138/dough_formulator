@@ -128,14 +128,21 @@ test('junk values are ignored and unknown keys are not added', () => {
     assert.equal('bogus' in c.getState(), false);
 });
 
+test('defaults are metric', () => {
+    const s = new DoughCalculator().getState();
+    assert.equal(s.tempUnit, 'C');
+    assert.equal(s.bakeTemp1, 230);
+    assert.equal(s.bakeTemp2, 220);
+});
+
 test('temperature unit toggle converts both temps and snaps to 5°', () => {
     const c = new DoughCalculator();
-    assert.equal(c.toggleTempUnit(), 'C');
-    assert.equal(c.getState().bakeTemp1, 230); // 450°F = 232°C
-    assert.equal(c.getState().bakeTemp2, 220); // 425°F = 218°C
     assert.equal(c.toggleTempUnit(), 'F');
-    assert.equal(c.getState().bakeTemp1, 445);
-    assert.equal(c.getState().bakeTemp2, 430);
+    assert.equal(c.getState().bakeTemp1, 445); // 230°C = 446°F
+    assert.equal(c.getState().bakeTemp2, 430); // 220°C = 428°F
+    assert.equal(c.toggleTempUnit(), 'C');
+    assert.equal(c.getState().bakeTemp1, 230);
+    assert.equal(c.getState().bakeTemp2, 220);
 });
 
 test('load falls back to defaults for missing or invalid fields', () => {
@@ -144,7 +151,7 @@ test('load falls back to defaults for missing or invalid fields', () => {
     const s = c.getState();
     assert.equal(s.flour, 700);
     assert.equal(s.hydration, 75);
-    assert.equal(s.tempUnit, 'F');
+    assert.equal(s.tempUnit, 'C');
     assert.equal(s.saltPct, 3);
     assert.equal('bogus' in s, false);
     c.load(null);
@@ -153,10 +160,10 @@ test('load falls back to defaults for missing or invalid fields', () => {
 
 test('load accepts a bare state object and honours tempUnit before temps', () => {
     const c = new DoughCalculator();
-    c.load({ tempUnit: 'C', bakeTemp1: 240, bakeTemp2: 210 });
-    assert.equal(c.getState().tempUnit, 'C');
-    assert.equal(c.getState().bakeTemp1, 240);
-    assert.equal(c.getState().bakeTemp2, 210);
+    c.load({ tempUnit: 'F', bakeTemp1: 450, bakeTemp2: 425 });
+    assert.equal(c.getState().tempUnit, 'F');
+    assert.equal(c.getState().bakeTemp1, 450);
+    assert.equal(c.getState().bakeTemp2, 425);
 });
 
 test('exportRecipe round-trips through load', () => {
